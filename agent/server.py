@@ -242,6 +242,23 @@ def read_and_concatenate_files(repo_dir: str, selected_files: list) -> str:
         logger.error(f"Error reading and concatenating files: {str(e)}", exc_info=True)
         return ""
 
+async def perform_audit(task_details: TaskResponse, repo_dir: str, config: Settings) -> Optional[Audit]:
+    # Read and concatenate selected files
+    concatenated_contracts = read_and_concatenate_files(repo_dir, task_details.selectedFiles)
+    if not concatenated_contracts:
+        logger.warning(f"No valid contracts content found for task {task_details.id}")
+        return None
+
+    # Read and concatenate selected docs
+    concatenated_docs = read_and_concatenate_files(repo_dir, task_details.selectedDocs)
+    if not concatenated_docs:
+        logger.info(f"No valid docs content found for task {task_details.id}")
+        # Continue anyway as docs are optional
+
+    # Audit files
+    auditor = SolidityAuditor(config.openai_api_key, config.openai_model)
+    return auditor.audit_files(concatenated_contracts, concatenated_docs, task_details.additionalLinks, task_details.additionalDocs, task_details.qaResponses)
+
 async def process_notification(notification: Notification, config: Settings):
     """
     Process a notification by fetching files, auditing them, and sending results.
@@ -250,6 +267,8 @@ async def process_notification(notification: Notification, config: Settings):
         notification: Notification payload
         config: Application configuration
     """
+
+    repo_dir = None
     try:
         logger.info(f"Processing notification for task {notification.task_id}")
         logger.info(f"Notification: {notification}")
@@ -274,30 +293,17 @@ async def process_notification(notification: Notification, config: Settings):
             logger.error(f"Failed to download repository for task {notification.task_id}")
             return
         
-        # Read and concatenate selected files
-        concatenated_contracts = read_and_concatenate_files(repo_dir, task_details.selectedFiles)
-        if not concatenated_contracts:
-            logger.warning(f"No valid contracts content found for task {notification.task_id}")
+        audit = await perform_audit(task_details, repo_dir, config)
+        if not audit:
             return
-        
-        # Read and concatenate selected docs
-        concatenated_docs = read_and_concatenate_files(repo_dir, task_details.selectedDocs)
-        if not concatenated_docs:
-            logger.info(f"No valid docs content found for task {notification.task_id}")
-            # Continue anyway as docs are optional
-        
-        # Audit files
-        auditor = SolidityAuditor(config.openai_api_key, config.openai_model)
-        audit = auditor.audit_files(concatenated_contracts, concatenated_docs, task_details.additionalLinks, task_details.additionalDocs, task_details.qaResponses)
-        
+
         # Send results back
         await send_audit_results(notification.post_findings_url, notification.task_id, audit)
-        
     except Exception as e:
         logger.error(f"Error processing notification: {str(e)}", exc_info=True)
     finally:
         # Clean up the repository directory
-        if os.path.exists(repo_dir):
+        if repo_dir and os.path.exists(repo_dir):
             try:
                 shutil.rmtree(repo_dir)
                 logger.info(f"Repository directory {repo_dir} cleaned up")
