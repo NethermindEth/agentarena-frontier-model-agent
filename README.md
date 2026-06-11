@@ -1,7 +1,6 @@
-# Solidity Audit Agent Template
+# AgentArena Frontier Model Agent
 
-An AI-powered agent template for auditing Solidity smart contracts using OpenAI models.
-Join the [telegram group](https://t.me/agent4rena) to stay updated with the latest news.
+An AI-powered agent template for auditing Solidity smart contracts using frontier models.
 
 ## Features
 
@@ -15,8 +14,8 @@ Join the [telegram group](https://t.me/agent4rena) to stay updated with the late
 
 ```bash
 # Clone the repository
-git clone https://github.com/NethermindEth/agentarena-agent-template.git
-cd agentarena-agent-template
+git clone https://github.com/NethermindEth/agentarena-frontier-model-agent.git
+cd agentarena-frontier-model-agent
 
 # Create a virtual environment
 python -m venv venv
