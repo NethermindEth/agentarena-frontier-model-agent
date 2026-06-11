@@ -169,7 +169,7 @@ def process_local(repo_url: str, output_path: str, config: Settings, commit_hash
         logger.info(f"Found {len(solidity_contracts)} Solidity contracts to audit")
         
         # Audit contracts
-        auditor = SolidityAuditor(config.openai_api_key, config.openai_model)
+        auditor = SolidityAuditor(config.api_key, config.model)
         audit = auditor.audit_files(solidity_contracts)
         audit_dict = [finding.model_dump() for finding in audit.findings]
 

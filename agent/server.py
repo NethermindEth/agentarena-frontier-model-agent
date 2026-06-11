@@ -256,7 +256,7 @@ async def perform_audit(task_details: TaskResponse, repo_dir: str, config: Setti
         # Continue anyway as docs are optional
 
     # Audit files
-    auditor = SolidityAuditor(config.openai_api_key, config.openai_model)
+    auditor = SolidityAuditor(config.api_key, config.model)
     return auditor.audit_files(concatenated_contracts, concatenated_docs, task_details.additionalLinks, task_details.additionalDocs, task_details.qaResponses)
 
 async def process_notification(notification: Notification, config: Settings):

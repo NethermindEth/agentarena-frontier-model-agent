@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     # Required fields for local mode
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
-    openai_model: str = Field("gpt-4.1-nano-2025-04-14", env="OPENAI_MODEL")
+    api_key: str = Field(..., env="API_KEY")
+    model: str = Field("cursor-composer-2.5", env="MODEL")
     log_level: str = Field("INFO", env="LOG_LEVEL")
     log_file: str = Field("agent.log", env="LOG_FILE")
     
