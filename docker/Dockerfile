@@ -94,4 +94,7 @@ RUN chmod +x /opt/agent/run_claude_detect.sh
 RUN chmod +x /opt/agent/run_gemini_detect.sh
 RUN chmod +x /opt/agent/run_cursor_detect.sh
 
+# Also, copying all the agent contents.
+COPY agent/ /opt/agent
+
 CMD ["python3", "/tmp/launch.py"]
