@@ -157,10 +157,10 @@ def process_local(repo_url: str, output_path: str, config: Settings, commit_hash
     
     try:
         # Clone the repository
-        repo_path = clone_repository(repo_url, commit_hash)
+        repo_dir = clone_repository(repo_url, commit_hash)
         
         # Find Solidity contracts
-        solidity_contracts = find_solidity_contracts(repo_path, only_selected)
+        solidity_contracts = find_solidity_contracts(repo_dir, only_selected)
         
         if not solidity_contracts:
             logger.warning(f"No Solidity contracts found in repository {repo_url}")
