@@ -87,7 +87,6 @@ RUN git config --global --add safe.directory $AGENT_DIR && \
 
 # Then install and configure the four launchers.
 RUN python3 -m pip install --no-cache-dir httpx uvloop loguru
-COPY docker/launch.py /tmp/launch.py
 COPY docker/run_*_detect.sh /opt/agent/
 RUN chmod +x /opt/agent/run_codex_detect.sh
 RUN chmod +x /opt/agent/run_claude_detect.sh
