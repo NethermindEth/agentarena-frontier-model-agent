@@ -34,9 +34,11 @@ cp .env.example .env
 Create a `.env` file from `.env.example` and set the variables.
 
 ```
-# OpenAI Configuration
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4.1-nano-2025-04-14
+# Detector configuration
+# DETECTOR can be codex, claude, gemini, or cursor.
+DETECTOR=cursor
+CURSOR_API_KEY=your_cursor_api_key
+CURSOR_MODEL=cursor-composer-2.5
 
 # Logging
 LOG_LEVEL=INFO
@@ -81,6 +83,9 @@ You can use the following example repository to test out the agent. The results 
 ```bash
 audit-agent local --repo https://github.com/andreitoma8/learn-solidity-hacks.git --output audit.json
 ```
+
+To use another detector, pass `--detector codex`, `--detector claude`, or `--detector gemini`
+and configure the corresponding API key/model environment variables.
 
 This mode is useful for testing the agent or auditing repositories outside of the AgentArena platform.
 
