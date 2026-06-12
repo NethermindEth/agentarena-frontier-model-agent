@@ -11,7 +11,8 @@ import zipfile
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel
 from agent.types import TaskResponse
-from agent.services.auditor import Audit, SolidityAuditor
+from agent.detection import run_detector
+from agent.services.auditor import Audit
 from agent.config import Settings
 import shutil
 
@@ -207,41 +208,6 @@ async def setup_repository(repo_url: str, task_id: str, config: Settings) -> Opt
             except Exception as cleanup_error:
                 logger.error(f"Error cleaning up temporary directory {temp_dir}: {str(cleanup_error)}")
 
-def read_and_concatenate_files(repo_dir: str, selected_files: list) -> str:
-    """
-    Read and concatenate content of selected files from the repository.
-    
-    Args:
-        repo_dir: Path to the repository directory
-        selected_files: List of file paths to read
-        
-    Returns:
-        String with all files concatenated with headers
-    """
-    concatenated = ""
-    
-    try:
-        for file_path in selected_files:
-            full_path = os.path.join(repo_dir, file_path)
-            print(f"Reading file: {full_path}")
-            if os.path.isfile(full_path):
-                try:
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        file_content = f.read()
-                        concatenated += f"// {file_path}\n{file_content}\n\n"
-                except UnicodeDecodeError:
-                    # Try with different encoding if utf-8 fails
-                    with open(full_path, 'r', encoding='latin-1') as f:
-                        file_content = f.read()
-                        concatenated += f"// {file_path}\n{file_content}\n\n"
-            else:
-                logger.warning(f"Selected file not found: {file_path}")
-        
-        return concatenated
-    except Exception as e:
-        logger.error(f"Error reading and concatenating files: {str(e)}", exc_info=True)
-        return ""
-
 def _task_to_text(task: TaskResponse) -> str:
     """
     Converts a task to a relevant text representation to be
@@ -290,21 +256,8 @@ Description of the repository
 """
 
 async def perform_audit(task_details: TaskResponse, repo_dir: str, config: Settings) -> Optional[Audit]:
-    # Read and concatenate selected files
-    concatenated_contracts = read_and_concatenate_files(repo_dir, task_details.selectedFiles)
-    if not concatenated_contracts:
-        logger.warning(f"No valid contracts content found for task {task_details.id}")
-        return None
-
-    # Read and concatenate selected docs
-    concatenated_docs = read_and_concatenate_files(repo_dir, task_details.selectedDocs)
-    if not concatenated_docs:
-        logger.info(f"No valid docs content found for task {task_details.id}")
-        # Continue anyway as docs are optional
-
-    # Audit files
-    auditor = SolidityAuditor(config.api_key, config.model)
-    return auditor.audit_files(concatenated_contracts, concatenated_docs, task_details.additionalLinks, task_details.additionalDocs, task_details.qaResponses)
+    logger.info(f"Running detector audit for task {task_details.id}")
+    return run_detector(repo_dir, config)
 
 async def process_notification(notification: Notification, config: Settings):
     """
