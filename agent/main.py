@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--repo", help="GitHub repository URL (required for local mode)")
     parser.add_argument("--commit", help="Specific commit hash to audit (optional for local mode)")
     parser.add_argument("--output", help="Output file path (for local mode)", default="security_audit_results.txt")
+    parser.add_argument("--detector", choices=["codex", "claude", "gemini", "cursor"], help="Detector script to run")
     parser.add_argument("--only-selected-files", action="store_true", help="Display and select specific .sol files to audit")
     
     # Server mode arguments
@@ -27,6 +28,8 @@ def main():
     
     # Load configuration
     config = load_config()
+    if args.detector:
+        config.detector = args.detector
     
     if args.mode == "server":
         # Validate required fields for server mode
