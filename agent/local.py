@@ -1,17 +1,16 @@
 """
 Local execution mode for the AI agent.
 """
-import json
 import os
 import logging
 import tempfile
+import shutil
 from typing import List
 import git
 import glob
 import questionary
-from agent.services.auditor import SolidityAuditor
-from agent.models.solidity_file import SolidityFile
 from agent.config import Settings
+from agent.detection import run_detector
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ def select_files_interactively(all_files: List[str]) -> List[str]:
         logger.info("Falling back to processing all files")
         return all_files
 
-def find_solidity_contracts(repo_path: str, only_selected: bool = False) -> List[SolidityFile]:
+def find_solidity_contracts(repo_path: str, only_selected: bool = False) -> List[str]:
     """
     Find all Solidity contracts in a repository.
     
@@ -84,7 +83,7 @@ def find_solidity_contracts(repo_path: str, only_selected: bool = False) -> List
         only_selected: Whether to enable interactive file selection
         
     Returns:
-        List of SolidityFile objects
+        List of relative Solidity file paths
     """
     logger.info(f"Searching for Solidity contracts in {repo_path}")
     
@@ -99,23 +98,7 @@ def find_solidity_contracts(repo_path: str, only_selected: bool = False) -> List
     else:
         selected_files = all_files
     
-    solidity_files = []
-    for file_path in selected_files:
-        try:
-            abs_path = os.path.join(repo_path, file_path)
-            with open(abs_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            solidity_files.append(
-                SolidityFile(
-                    path=file_path,
-                    content=content
-                )
-            )
-        except Exception as e:
-            logger.error(f"Error reading contract {file_path}: {str(e)}")
-    
-    return solidity_files
+    return selected_files
 
 def save_audit_results(output_path: str, audit: str):
     """
@@ -155,29 +138,35 @@ def process_local(repo_url: str, output_path: str, config: Settings, commit_hash
         ]
     )
     
+    repo_dir = None
     try:
         # Clone the repository
         repo_dir = clone_repository(repo_url, commit_hash)
         
-        # Find Solidity contracts
-        solidity_contracts = find_solidity_contracts(repo_dir, only_selected)
-        
-        if not solidity_contracts:
+        # Find Solidity contract paths for scoping instructions only. The detector
+        # receives a fresh copy of the whole repository and reads files itself.
+        selected_contracts = find_solidity_contracts(repo_dir, only_selected)
+
+        if not selected_contracts:
             logger.warning(f"No Solidity contracts found in repository {repo_url}")
             return
-        
-        logger.info(f"Found {len(solidity_contracts)} Solidity contracts to audit")
-        
-        # Audit contracts
-        auditor = SolidityAuditor(config.api_key, config.model)
-        audit = auditor.audit_files(solidity_contracts)
-        audit_dict = [finding.model_dump() for finding in audit.findings]
+
+        logger.info(f"Found {len(selected_contracts)} Solidity contracts to audit")
+
+        audit = run_detector(repo_dir, config)
 
         # Save results
-        save_audit_results(output_path, json.dumps(audit_dict, indent=2))
+        save_audit_results(output_path, audit.model_dump_json(indent=2))
         
         logger.info("Security audit completed successfully")
         
     except Exception as e:
         logger.error(f"Error in local processing: {str(e)}")
         raise
+    finally:
+        if repo_dir and os.path.exists(repo_dir):
+            try:
+                shutil.rmtree(repo_dir)
+                logger.info(f"Repository directory {repo_dir} cleaned up")
+            except Exception as cleanup_error:
+                logger.error(f"Error cleaning up repository directory {repo_dir}: {str(cleanup_error)}")
