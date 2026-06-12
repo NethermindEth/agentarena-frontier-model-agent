@@ -4,7 +4,8 @@ set -euo pipefail
 # Runs the detect-only Codex audit and writes submission/audit.md.
 #
 # Expected environment:
-# - AGENT_DIR: directory containing audit/, submission/
+# - first argument: directory containing code to audit
+# - AGENT_DIR: temporary working directory containing audit/, submission/
 # - SUBMISSION_DIR: output dir (typically $AGENT_DIR/submission)
 # - LOGS_DIR: log directory
 # - OPENAI_API_KEY: plaintext key (direct mode) or opaque token (proxy mode)
@@ -20,6 +21,13 @@ set -euo pipefail
 : "${CODEX_API_KEY:?missing CODEX_API_KEY}"
 : "${CODEX_MODEL:?missing CODEX_MODEL}"
 : "${EVM_BENCH_DETECT_MD:?missing EVM_BENCH_DETECT_MD}"
+
+CODE_DIR="${1:?usage: run_codex_detect.sh CODE_DIR}"
+if [[ ! -d "${CODE_DIR}" ]]; then
+  echo "code directory does not exist: ${CODE_DIR}" >&2
+  exit 2
+fi
+export AUDIT_DIR="${CODE_DIR}"
 
 mkdir -p "${SUBMISSION_DIR}" "${LOGS_DIR}"
 
@@ -46,6 +54,8 @@ if [[ ! -f "${AUTH_PATH}" ]]; then
   printf '%s\n' "${OPENAI_API_KEY}" | codex login --with-api-key > "${LOGS_DIR}/codex_login.log" 2>&1 || true
 fi
 
+cd "${AGENT_DIR}"
+
 timeout --signal=KILL "${TIMEOUT_SECONDS}s" codex exec \
   --model "${CODEX_MODEL}" \
   --dangerously-bypass-approvals-and-sandbox \
@@ -58,4 +68,3 @@ if [[ ! -s "${SUBMISSION_DIR}/audit.md" ]]; then
   echo "missing expected output: ${SUBMISSION_DIR}/audit.md" >&2
   exit 2
 fi
-

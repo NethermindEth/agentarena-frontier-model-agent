@@ -4,7 +4,8 @@ set -euo pipefail
 # Runs the detect-only Claude code audit and writes submission/audit.md.
 #
 # Expected environment:
-# - AGENT_DIR: directory containing audit/, submission/
+# - first argument: directory containing code to audit
+# - AGENT_DIR: temporary working directory containing audit/, submission/
 # - SUBMISSION_DIR: output dir (typically $AGENT_DIR/submission)
 # - LOGS_DIR: log directory
 # - ANTHROPIC_API_KEY: the API key
@@ -19,6 +20,13 @@ set -euo pipefail
 : "${CLAUDE_MODEL:?missing CLAUDE_MODEL}"
 : "${EVM_BENCH_DETECT_MD:?missing EVM_BENCH_DETECT_MD}"
 
+CODE_DIR="${1:?usage: run_claude_detect.sh CODE_DIR}"
+if [[ ! -d "${CODE_DIR}" ]]; then
+  echo "code directory does not exist: ${CODE_DIR}" >&2
+  exit 2
+fi
+export AUDIT_DIR="${CODE_DIR}"
+
 mkdir -p "${SUBMISSION_DIR}" "${LOGS_DIR}"
 
 TIMEOUT_SECONDS="${EVM_BENCH_CLAUDE_TIMEOUT_SECONDS:-10800}"
@@ -32,6 +40,8 @@ rm -f "${SUBMISSION_DIR}/audit.md"
 LAUNCHER_PROMPT='You are an expert smart contract auditor.
 First read the CLAUDE.md file for your detailed instructions.
 Then proceed. Ensure to follow the submission instructions exactly.'
+
+cd "${AGENT_DIR}"
 
 IS_SANDBOX=1 timeout --signal=KILL "${TIMEOUT_SECONDS}s" claude \
   --model "${CLAUDE_MODEL}" \

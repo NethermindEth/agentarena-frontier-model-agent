@@ -4,7 +4,8 @@ set -euo pipefail
 # Runs the detect-only Cursor code audit and writes submission/audit.md.
 #
 # Expected environment:
-# - AGENT_DIR: directory containing audit/, submission/
+# - first argument: directory containing code to audit
+# - AGENT_DIR: temporary working directory containing audit/, submission/
 # - SUBMISSION_DIR: output dir (typically $AGENT_DIR/submission)
 # - LOGS_DIR: log directory
 # - CURSOR_API_KEY: the API key
@@ -18,6 +19,13 @@ set -euo pipefail
 : "${CURSOR_API_KEY:?missing CURSOR_API_KEY}"
 : "${CURSOR_MODEL:?missing CURSOR_MODEL}"
 : "${EVM_BENCH_DETECT_MD:?missing EVM_BENCH_DETECT_MD}"
+
+CODE_DIR="${1:?usage: run_cursor_detect.sh CODE_DIR}"
+if [[ ! -d "${CODE_DIR}" ]]; then
+  echo "code directory does not exist: ${CODE_DIR}" >&2
+  exit 2
+fi
+export AUDIT_DIR="${CODE_DIR}"
 
 mkdir -p "${SUBMISSION_DIR}" "${LOGS_DIR}"
 
@@ -42,6 +50,7 @@ dump_failure_state() {
 }
 
 set +e
+cd "${AGENT_DIR}"
 IS_SANDBOX=1 timeout --signal=KILL "${TIMEOUT_SECONDS}s" cursor-agent \
   --model "${CURSOR_MODEL}" \
   --print \
