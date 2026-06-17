@@ -143,8 +143,6 @@ def process_local(repo_url: str, output_path: str, config: Settings, commit_hash
         # Clone the repository
         repo_dir = clone_repository(repo_url, commit_hash)
         
-        # Find Solidity contract paths for scoping instructions only. The detector
-        # receives a fresh copy of the whole repository and reads files itself.
         selected_contracts = find_solidity_contracts(repo_dir, only_selected)
 
         if not selected_contracts:
@@ -153,7 +151,7 @@ def process_local(repo_url: str, output_path: str, config: Settings, commit_hash
 
         logger.info(f"Found {len(selected_contracts)} Solidity contracts to audit")
 
-        audit = run_detector(repo_dir, config)
+        audit = run_detector(repo_dir, config, selected_paths=selected_contracts)
 
         # Save results
         save_audit_results(output_path, audit.model_dump_json(indent=2))

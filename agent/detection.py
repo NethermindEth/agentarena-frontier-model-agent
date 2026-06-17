@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Iterable, Optional
 
 from agent.config import Settings
 from agent.services.auditor import Audit, VulnerabilityFinding
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 DETECTORS = {"codex", "claude", "gemini", "cursor"}
 REPORT_NAME = "audit.md"
+SCOPE_NAME = "AUDIT_SCOPE.md"
 
 
 def _detector_script(detector: str) -> Path:
@@ -124,7 +126,80 @@ def _audit_from_report(report_path: str) -> Audit:
     )
 
 
-def run_detector(repo_dir: str, config: Settings) -> Audit:
+def _safe_relative_path(path: str) -> Optional[Path]:
+    rel_path = Path(path)
+    if rel_path.is_absolute() or not rel_path.parts:
+        return None
+    if any(part in {"", ".", ".."} for part in rel_path.parts):
+        return None
+    return rel_path
+
+
+def _copy_selected_paths(repo_dir: str, audit_dir: str, selected_paths: Iterable[str]) -> int:
+    repo_root = Path(repo_dir).resolve()
+    audit_root = Path(audit_dir)
+    audit_root.mkdir(parents=True, exist_ok=True)
+
+    copied = 0
+    for selected_path in dict.fromkeys(selected_paths):
+        rel_path = _safe_relative_path(selected_path)
+        if rel_path is None:
+            logger.warning("Ignoring unsafe selected path: %s", selected_path)
+            continue
+
+        source = (repo_root / rel_path).resolve()
+        try:
+            source.relative_to(repo_root)
+        except ValueError:
+            logger.warning("Ignoring selected path outside repository: %s", selected_path)
+            continue
+
+        if not source.exists():
+            logger.warning("Selected path does not exist in repository: %s", selected_path)
+            continue
+
+        target = audit_root / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            shutil.copytree(
+                source,
+                target,
+                symlinks=True,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git"),
+            )
+        else:
+            shutil.copy2(source, target, follow_symlinks=False)
+        copied += 1
+
+    return copied
+
+
+def _prepare_audit_dir(
+    repo_dir: str,
+    audit_dir: str,
+    selected_paths: Optional[Iterable[str]],
+    scope_text: Optional[str],
+) -> None:
+    if selected_paths is None:
+        shutil.copytree(repo_dir, audit_dir, symlinks=True)
+    else:
+        copied = _copy_selected_paths(repo_dir, audit_dir, selected_paths)
+        if copied == 0:
+            raise FileNotFoundError("None of the selected files/docs exist in the repository")
+        logger.info("Prepared scoped audit directory with %s selected file/doc paths", copied)
+
+    if scope_text:
+        scope_path = Path(audit_dir) / SCOPE_NAME
+        scope_path.write_text(scope_text.strip() + "\n", encoding="utf-8")
+
+
+def run_detector(
+    repo_dir: str,
+    config: Settings,
+    selected_paths: Optional[Iterable[str]] = None,
+    scope_text: Optional[str] = None,
+) -> Audit:
     detector = config.detector.lower()
     if detector not in DETECTORS:
         raise ValueError(f"Unsupported detector '{config.detector}'. Expected one of {sorted(DETECTORS)}")
@@ -139,7 +214,7 @@ def run_detector(repo_dir: str, config: Settings) -> Audit:
         os.makedirs(submission_dir, exist_ok=True)
         os.makedirs(logs_dir, exist_ok=True)
 
-        shutil.copytree(repo_dir, audit_dir, symlinks=True)
+        _prepare_audit_dir(repo_dir, audit_dir, selected_paths, scope_text)
 
         env = os.environ.copy()
         env.update(
@@ -148,7 +223,7 @@ def run_detector(repo_dir: str, config: Settings) -> Audit:
                 "AUDIT_DIR": audit_dir,
                 "SUBMISSION_DIR": submission_dir,
                 "LOGS_DIR": logs_dir,
-                "EVM_BENCH_DETECT_MD": str(detect_md),
+                "DETECT_MD": str(detect_md),
             }
         )
         _apply_detector_env(env, detector, config)

@@ -11,8 +11,8 @@ set -euo pipefail
 # - OPENAI_API_KEY: plaintext key (direct mode) or opaque token (proxy mode)
 # - CODEX_API_KEY: same value as OPENAI_API_KEY (kept aligned)
 # - CODEX_MODEL: resolved Codex model id
-# - EVM_BENCH_DETECT_MD: path to detect instructions markdown
-# - EVM_BENCH_CODEX_TIMEOUT_SECONDS: optional max runtime (default 10800)
+# - DETECT_MD: path to detect instructions markdown
+# - CODEX_TIMEOUT_SECONDS: optional max runtime (default 10800)
 
 : "${AGENT_DIR:?missing AGENT_DIR}"
 : "${SUBMISSION_DIR:?missing SUBMISSION_DIR}"
@@ -20,7 +20,7 @@ set -euo pipefail
 : "${OPENAI_API_KEY:?missing OPENAI_API_KEY}"
 : "${CODEX_API_KEY:?missing CODEX_API_KEY}"
 : "${CODEX_MODEL:?missing CODEX_MODEL}"
-: "${EVM_BENCH_DETECT_MD:?missing EVM_BENCH_DETECT_MD}"
+: "${DETECT_MD:?missing DETECT_MD}"
 
 CODE_DIR="${1:?usage: run_codex_detect.sh CODE_DIR}"
 if [[ ! -d "${CODE_DIR}" ]]; then
@@ -32,14 +32,14 @@ export AUDIT_DIR="${CODE_DIR}"
 mkdir -p "${SUBMISSION_DIR}" "${LOGS_DIR}"
 
 # Keep runaway audits bounded by default.
-TIMEOUT_SECONDS="${EVM_BENCH_CODEX_TIMEOUT_SECONDS:-10800}"
+TIMEOUT_SECONDS="${CODEX_TIMEOUT_SECONDS:-10800}"
 if ! [[ "${TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
-  echo "invalid EVM_BENCH_CODEX_TIMEOUT_SECONDS=${TIMEOUT_SECONDS}" >&2
+  echo "invalid CODEX_TIMEOUT_SECONDS=${TIMEOUT_SECONDS}" >&2
   exit 2
 fi
 
 # Render instructions where Codex will read them.
-cp "${EVM_BENCH_DETECT_MD}" "${AGENT_DIR}/AGENTS.md"
+cp "${DETECT_MD}" "${AGENT_DIR}/AGENTS.md"
 
 # Ensure a clean output.
 rm -f "${SUBMISSION_DIR}/audit.md"

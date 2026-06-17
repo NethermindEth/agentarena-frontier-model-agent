@@ -10,15 +10,15 @@ set -euo pipefail
 # - LOGS_DIR: log directory
 # - GEMINI_API_KEY: the API key
 # - GEMINI_MODEL: resolved model id (e.g., gemini-2.5-pro)
-# - EVM_BENCH_DETECT_MD: path to detect instructions markdown
-# - EVM_BENCH_GEMINI_TIMEOUT_SECONDS: optional max runtime (default 10800)
+# - DETECT_MD: path to detect instructions markdown
+# - GEMINI_TIMEOUT_SECONDS: optional max runtime (default 10800)
 
 : "${AGENT_DIR:?missing AGENT_DIR}"
 : "${SUBMISSION_DIR:?missing SUBMISSION_DIR}"
 : "${LOGS_DIR:?missing LOGS_DIR}"
 : "${GEMINI_API_KEY:?missing GEMINI_API_KEY}"
 : "${GEMINI_MODEL:?missing GEMINI_MODEL}"
-: "${EVM_BENCH_DETECT_MD:?missing EVM_BENCH_DETECT_MD}"
+: "${DETECT_MD:?missing DETECT_MD}"
 
 CODE_DIR="${1:?usage: run_gemini_detect.sh CODE_DIR}"
 if [[ ! -d "${CODE_DIR}" ]]; then
@@ -29,10 +29,10 @@ export AUDIT_DIR="${CODE_DIR}"
 
 mkdir -p "${SUBMISSION_DIR}" "${LOGS_DIR}"
 
-TIMEOUT_SECONDS="${EVM_BENCH_GEMINI_TIMEOUT_SECONDS:-10800}"
+TIMEOUT_SECONDS="${GEMINI_TIMEOUT_SECONDS:-10800}"
 
 # Render instructions where Gemini will read them.
-cp "${EVM_BENCH_DETECT_MD}" "${AGENT_DIR}/GEMINI.md"
+cp "${DETECT_MD}" "${AGENT_DIR}/GEMINI.md"
 
 # Ensure a clean output.
 rm -f "${SUBMISSION_DIR}/audit.md"

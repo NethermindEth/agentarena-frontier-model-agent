@@ -10,15 +10,15 @@ set -euo pipefail
 # - LOGS_DIR: log directory
 # - CURSOR_API_KEY: the API key
 # - CURSOR_MODEL: resolved model id (e.g., composer-2.5)
-# - EVM_BENCH_DETECT_MD: path to detect instructions markdown
-# - EVM_BENCH_CURSOR_TIMEOUT_SECONDS: optional max runtime (default 10800)
+# - DETECT_MD: path to detect instructions markdown
+# - CURSOR_TIMEOUT_SECONDS: optional max runtime (default 10800)
 
 : "${AGENT_DIR:?missing AGENT_DIR}"
 : "${SUBMISSION_DIR:?missing SUBMISSION_DIR}"
 : "${LOGS_DIR:?missing LOGS_DIR}"
 : "${CURSOR_API_KEY:?missing CURSOR_API_KEY}"
 : "${CURSOR_MODEL:?missing CURSOR_MODEL}"
-: "${EVM_BENCH_DETECT_MD:?missing EVM_BENCH_DETECT_MD}"
+: "${DETECT_MD:?missing DETECT_MD}"
 
 CODE_DIR="${1:?usage: run_cursor_detect.sh CODE_DIR}"
 if [[ ! -d "${CODE_DIR}" ]]; then
@@ -29,10 +29,10 @@ export AUDIT_DIR="${CODE_DIR}"
 
 mkdir -p "${SUBMISSION_DIR}" "${LOGS_DIR}"
 
-TIMEOUT_SECONDS="${EVM_BENCH_CURSOR_TIMEOUT_SECONDS:-10800}"
+TIMEOUT_SECONDS="${CURSOR_TIMEOUT_SECONDS:-10800}"
 
 # Render instructions where Cursor will read them.
-cp "${EVM_BENCH_DETECT_MD}" "${AGENT_DIR}/AGENTS.md"
+cp "${DETECT_MD}" "${AGENT_DIR}/AGENTS.md"
 
 # Ensure a clean output.
 rm -f "${SUBMISSION_DIR}/audit.md"

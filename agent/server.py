@@ -257,7 +257,16 @@ Description of the repository
 
 async def perform_audit(task_details: TaskResponse, repo_dir: str, config: Settings) -> Optional[Audit]:
     logger.info(f"Running detector audit for task {task_details.id}")
-    return run_detector(repo_dir, config)
+    selected_paths = [
+        *(task_details.selectedFiles or []),
+        *(task_details.selectedDocs or []),
+    ]
+    return run_detector(
+        repo_dir,
+        config,
+        selected_paths=selected_paths,
+        scope_text=_task_to_text(task_details),
+    )
 
 async def process_notification(notification: Notification, config: Settings):
     """

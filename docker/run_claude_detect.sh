@@ -10,15 +10,15 @@ set -euo pipefail
 # - LOGS_DIR: log directory
 # - ANTHROPIC_API_KEY: the API key
 # - CLAUDE_MODEL: resolved model id (e.g., claude-opus-4-5-20251101)
-# - EVM_BENCH_DETECT_MD: path to detect instructions markdown
-# - EVM_BENCH_CLAUDE_TIMEOUT_SECONDS: optional max runtime (default 10800)
+# - DETECT_MD: path to detect instructions markdown
+# - CLAUDE_TIMEOUT_SECONDS: optional max runtime (default 10800)
 
 : "${AGENT_DIR:?missing AGENT_DIR}"
 : "${SUBMISSION_DIR:?missing SUBMISSION_DIR}"
 : "${LOGS_DIR:?missing LOGS_DIR}"
 : "${ANTHROPIC_API_KEY:?missing ANTHROPIC_API_KEY}"
 : "${CLAUDE_MODEL:?missing CLAUDE_MODEL}"
-: "${EVM_BENCH_DETECT_MD:?missing EVM_BENCH_DETECT_MD}"
+: "${DETECT_MD:?missing DETECT_MD}"
 
 CODE_DIR="${1:?usage: run_claude_detect.sh CODE_DIR}"
 if [[ ! -d "${CODE_DIR}" ]]; then
@@ -29,10 +29,10 @@ export AUDIT_DIR="${CODE_DIR}"
 
 mkdir -p "${SUBMISSION_DIR}" "${LOGS_DIR}"
 
-TIMEOUT_SECONDS="${EVM_BENCH_CLAUDE_TIMEOUT_SECONDS:-10800}"
+TIMEOUT_SECONDS="${CLAUDE_TIMEOUT_SECONDS:-10800}"
 
 # Render instructions where Claude will read them.
-cp "${EVM_BENCH_DETECT_MD}" "${AGENT_DIR}/CLAUDE.md"
+cp "${DETECT_MD}" "${AGENT_DIR}/CLAUDE.md"
 
 # Ensure a clean output.
 rm -f "${SUBMISSION_DIR}/audit.md"
