@@ -96,4 +96,10 @@ RUN chmod +x /opt/agent/run_cursor_detect.sh
 # Also, copying all the agent contents.
 COPY agent/ /opt/agent
 
-CMD ["python3", "/tmp/launch.py"]
+# Install the project so the `audit-agent` entry point is available on PATH.
+COPY pyproject.toml README.md LICENSE /opt/audit-agent/
+COPY agent/ /opt/audit-agent/agent/
+RUN python3 -m pip install --no-cache-dir /opt/audit-agent
+
+EXPOSE 8008
+CMD ["audit-agent", "server", "--port", "8008"]

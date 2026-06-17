@@ -63,16 +63,27 @@ To run the agent in server mode you need to:
       DATA_DIR=./data
       ```
     - Click the `Test` button to make sure the webhook is working.
-3. Then you need to run the agent in server mode
-    ```bash
-    audit-agent server
-    ```
+3. Then you need to run the agent in server mode in a docker container:
 
-By default, the agent will run on port 8000. To use a custom port, you can use the following command:
+   First, build the image:
 
-```bash
-audit-agent server --port 8008
-```
+   ```bash
+   docker build -t agentarena/frontier-model-agent . -f docker/Dockerfile
+   ```
+   
+   Then, run the container:
+
+   ```bash
+   docker run -p 8008:8008 --env-file=.env agentarena/frontier-model-agent
+   ```
+   
+   Which matches:
+   
+   ```bash
+   docker run -p 8008:8008 --env-file=.env agentarena/frontier-model-agent audit-agent server --port 8008
+   ```
+
+   A custom port may be chosen.
 
 ### Local Mode
 
@@ -81,7 +92,7 @@ Run the agent in local mode to audit a GitHub repository directly.
 You can use the following example repository to test out the agent. The results will be saved in JSON format in the specified output file, by default that is `audit.json`.
 
 ```bash
-audit-agent local --repo https://github.com/andreitoma8/learn-solidity-hacks.git --output audit.json
+docker run -v .:/path/to --env-file=.env agentarena/frontier-model-agent audit-agent local --repo https://github.com/andreitoma8/learn-solidity-hacks.git --output /path/to/audit.json
 ```
 
 To use another detector, pass `--detector codex`, `--detector claude`, or `--detector gemini`

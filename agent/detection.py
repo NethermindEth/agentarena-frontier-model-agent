@@ -219,6 +219,7 @@ def run_detector(
         env = os.environ.copy()
         env.update(
             {
+                "HOME": work_dir,
                 "AGENT_DIR": work_dir,
                 "AUDIT_DIR": audit_dir,
                 "SUBMISSION_DIR": submission_dir,
