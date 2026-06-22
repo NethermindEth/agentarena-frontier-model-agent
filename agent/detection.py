@@ -140,6 +140,15 @@ def _copy_selected_paths(repo_dir: str, audit_dir: str, selected_paths: Iterable
     audit_root = Path(audit_dir)
     audit_root.mkdir(parents=True, exist_ok=True)
 
+    # Temporary debug logging: dump the recursive contents of repo_dir and the
+    # selected paths so we can inspect what is being copied. Remove once done.
+    selected_paths = list(selected_paths)
+    repo_contents = sorted(
+        str(p.relative_to(repo_root)) for p in repo_root.rglob("*")
+    )
+    logger.info("repo_dir=%s recursive contents:\n%s", repo_dir, "\n".join(repo_contents))
+    logger.info("selected_paths (%d):\n%s", len(selected_paths), "\n".join(map(str, selected_paths)))
+
     copied = 0
     for selected_path in dict.fromkeys(selected_paths):
         rel_path = _safe_relative_path(selected_path)

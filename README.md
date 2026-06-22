@@ -38,7 +38,7 @@ Create a `.env` file from `.env.example` and set the variables.
 # DETECTOR can be codex, claude, gemini, or cursor.
 DETECTOR=cursor
 CURSOR_API_KEY=your_cursor_api_key
-CURSOR_MODEL=cursor-composer-2.5
+CURSOR_MODEL=composer-2.5
 
 # Logging
 LOG_LEVEL=INFO

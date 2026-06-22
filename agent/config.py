@@ -40,7 +40,7 @@ class Settings(BaseSettings):
             "CLAUDE_MODEL",
             "GEMINI_MODEL",
         )
-        or "cursor-composer-2.5"
+        or "composer-2.5"
     )
     detector: str = Field(default_factory=lambda: _first_env("DETECTOR", "AGENT_DETECTOR") or "cursor")
     log_level: str = "INFO"
