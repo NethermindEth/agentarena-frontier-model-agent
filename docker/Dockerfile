@@ -66,6 +66,17 @@ RUN curl -fsSL https://cursor.com/install | bash \
     && chmod 0755 /usr/local/bin/cursor-agent \
     && cursor-agent --version
 
+# Security remediation: patch vulnerable transitive deps that are vendored
+# inside the CLIs installed above and cannot be upgraded via this project's
+# package manager. Pinned to close (same-major/minor) ranges so the package
+# API is unchanged. Run after every CLI install so all bundled copies are seen.
+#   CVE-2026-33671  picomatch  *.* -> 4.0.4  (ReDoS via crafted extglob, HIGH)
+#   CVE-2026-55388  piscina    4.x -> 4.9.3  (prototype pollution -> RCE)
+COPY docker/patch_vuln_dep.sh /usr/local/bin/patch_vuln_dep.sh
+RUN chmod +x /usr/local/bin/patch_vuln_dep.sh \
+    && patch_vuln_dep.sh picomatch 4.0.4 "/usr /home /opt" \
+    && patch_vuln_dep.sh piscina   4.9.3 "/usr /home /opt"
+
 # install ripgrep
 RUN apt-get update && apt-get install -y --no-install-recommends ripgrep && rm -rf /var/lib/apt/lists/*
 
