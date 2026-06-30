@@ -5,7 +5,7 @@ An AI-powered agent template for auditing Solidity smart contracts using frontie
 ## Features
 
 - Audit Solidity contracts for security vulnerabilities
-- Security findings classified by threat level (Critical, High, Medium, Low, Informational)
+- Security findings classified by threat level (Critical, High, Medium, Low, Info)
 - Two operation modes:
   - **Server mode**: Runs a webhook server to receive notifications from AgentArena when a new challenge begins
   - **Local mode**: Processes a GitHub repository directly
