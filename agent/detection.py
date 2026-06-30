@@ -98,7 +98,7 @@ def _audit_from_report(report_path: str) -> Audit:
                     VulnerabilityFinding(
                         title=vulnerability.get("title", "Untitled vulnerability"),
                         description=json.dumps(vulnerability, indent=2),
-                        severity=str(vulnerability.get("severity", "informational")).capitalize(),
+                        severity=str(vulnerability.get("severity", "info")).capitalize(),
                         file_paths=[
                             item["file"]
                             for item in vulnerability.get("description", [])
@@ -119,7 +119,7 @@ def _audit_from_report(report_path: str) -> Audit:
             VulnerabilityFinding(
                 title="Detector audit report",
                 description=report,
-                severity="Informational",
+                severity="Info",
                 file_paths=[],
             )
         ]
