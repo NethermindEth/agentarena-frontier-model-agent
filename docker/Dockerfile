@@ -61,6 +61,8 @@ RUN npm install -g @anthropic-ai/claude-code && claude --version
 RUN npm install -g @google/gemini-cli && gemini --version
 
 # install cursor cli
+# NOTES: Since this installer does not pin a version, we need to manually
+#        bump / patch the version(s) later if any vulnerability arises.
 RUN curl -fsSL https://cursor.com/install | bash \
     && cp -L "$HOME/.local/bin/cursor-agent" /usr/local/bin/cursor-agent \
     && chmod 0755 /usr/local/bin/cursor-agent \
