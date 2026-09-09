@@ -35,7 +35,7 @@ RUN mkdir -p "$AUDIT_DIR" "$SUBMISSION_DIR" "$LOGS_DIR"
 # install codex
 # Default to the latest known stable release tag; can be overridden at build time:
 #   docker build --build-arg CODEX_VERSION=rust-vX.Y.Z ...
-ARG CODEX_VERSION=rust-v0.104.0
+ARG CODEX_VERSION=rust-v0.153.1
 ARG TARGETARCH
 RUN set -eux; \
     arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
@@ -44,13 +44,24 @@ RUN set -eux; \
       arm64) CODEX_ARCH="aarch64" ;; \
       *) echo "Unsupported arch: $arch" >&2; exit 1 ;; \
     esac; \
-    CODEX_URL="https://github.com/openai/codex/releases/download/${CODEX_VERSION}/codex-${CODEX_ARCH}-unknown-linux-gnu.tar.gz"; \
+    CODEX_URL="https://github.com/openai/codex/releases/download/${CODEX_VERSION}/codex-${CODEX_ARCH}-unknown-linux-musl.tar.gz"; \
     mkdir -p /usr/local/src/codex; cd /usr/local/src/codex; \
     curl -L -o codex.tgz "$CODEX_URL"; \
     ENTRY="$(tar -tzf codex.tgz | grep -v '/$' | head -n1)"; \
     test -n "$ENTRY"; \
     tar -xzf codex.tgz -O "$ENTRY" > /usr/local/bin/codex; \
     chmod 0755 /usr/local/bin/codex; \
+    # Codex >=0.153 routes its command/edit tools through a separate
+    # "code-mode host" helper that it spawns from the SAME directory as the
+    # codex binary. Without it, `codex exec` fails closed the moment the model
+    # tries to read a file, so a real audit produces no report. Install it
+    # next to codex (same release, matching arch).
+    CMH_URL="https://github.com/openai/codex/releases/download/${CODEX_VERSION}/codex-code-mode-host-${CODEX_ARCH}-unknown-linux-musl.tar.gz"; \
+    curl -L -o cmh.tgz "$CMH_URL"; \
+    CMH_ENTRY="$(tar -tzf cmh.tgz | grep -v '/$' | head -n1)"; \
+    test -n "$CMH_ENTRY"; \
+    tar -xzf cmh.tgz -O "$CMH_ENTRY" > /usr/local/bin/codex-code-mode-host; \
+    chmod 0755 /usr/local/bin/codex-code-mode-host; \
     cd /; rm -rf /usr/local/src/codex; \
     codex --version
 
