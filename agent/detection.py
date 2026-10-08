@@ -15,7 +15,7 @@ from agent.services.auditor import Audit, VulnerabilityFinding
 
 logger = logging.getLogger(__name__)
 
-DETECTORS = {"codex", "claude", "gemini", "cursor"}
+DETECTORS = {"codex", "claude", "gemini", "cursor", "litellm"}
 REPORT_NAME = "audit.md"
 SCOPE_NAME = "AUDIT_SCOPE.md"
 
@@ -49,8 +49,14 @@ def _apply_detector_env(env: dict, detector: str, config: Settings) -> None:
         "claude": "CLAUDE_MODEL",
         "gemini": "GEMINI_MODEL",
         "cursor": "CURSOR_MODEL",
+        "litellm": "LITELLM_MODEL",
     }[detector]
     env.setdefault(model_env, config.model)
+
+    # LiteLLM drives the Codex CLI against a custom OpenAI-compatible endpoint,
+    # so the base URL travels alongside the model/key.
+    if detector == "litellm":
+        env.setdefault("LITELLM_BASE_URL", config.litellm_base_url)
 
     if not config.api_key:
         return
@@ -64,6 +70,8 @@ def _apply_detector_env(env: dict, detector: str, config: Settings) -> None:
         env.setdefault("GEMINI_API_KEY", config.api_key)
     elif detector == "cursor":
         env.setdefault("CURSOR_API_KEY", config.api_key)
+    elif detector == "litellm":
+        env.setdefault("LITELLM_API_KEY", config.api_key)
 
 
 def _extract_json_report(report: str) -> str:

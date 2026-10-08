@@ -35,7 +35,7 @@ Create a `.env` file from `.env.example` and set the variables.
 
 ```
 # Detector configuration
-# DETECTOR can be codex, claude, gemini, or cursor.
+# DETECTOR can be codex, claude, gemini, cursor, or litellm.
 DETECTOR=cursor
 CURSOR_API_KEY=your_cursor_api_key
 CURSOR_MODEL=composer-2.5
@@ -95,8 +95,19 @@ You can use the following example repository to test out the agent. The results 
 docker run -v .:/path/to --env-file=.env agentarena/frontier-model-agent audit-agent local --repo https://github.com/andreitoma8/learn-solidity-hacks.git --output /path/to/audit.json
 ```
 
-To use another detector, pass `--detector codex`, `--detector claude`, or `--detector gemini`
-and configure the corresponding API key/model environment variables.
+To use another detector, pass `--detector codex`, `--detector claude`, `--detector gemini`,
+or `--detector litellm` and configure the corresponding API key/model environment variables.
+
+The `litellm` detector reuses the Codex CLI but points it at a LiteLLM proxy (an
+OpenAI-compatible endpoint) instead of OpenAI. Configure it with:
+
+```
+DETECTOR=litellm
+MODEL=<any model served by the LiteLLM proxy>
+API_KEY=<your LiteLLM API key>
+# Optional: override the endpoint (defaults to https://llm.nethermind.io/v1)
+LITELLM_BASE_URL=https://llm.nethermind.io/v1
+```
 
 This mode is useful for testing the agent or auditing repositories outside of the AgentArena platform.
 

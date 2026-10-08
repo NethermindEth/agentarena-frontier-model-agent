@@ -29,6 +29,7 @@ class Settings(BaseSettings):
             "ANTHROPIC_API_KEY",
             "GEMINI_API_KEY",
             "CURSOR_API_KEY",
+            "LITELLM_API_KEY",
         )
     )
     model: str = Field(
@@ -39,10 +40,16 @@ class Settings(BaseSettings):
             "CODEX_MODEL",
             "CLAUDE_MODEL",
             "GEMINI_MODEL",
+            "LITELLM_MODEL",
         )
         or "composer-2.5"
     )
     detector: str = Field(default_factory=lambda: _first_env("DETECTOR", "AGENT_DETECTOR") or "cursor")
+    # Base URL for the LiteLLM (OpenAI-compatible) endpoint. Only used by the
+    # `litellm` detector, which drives the Codex CLI against this URL.
+    litellm_base_url: str = Field(
+        default_factory=lambda: _first_env("LITELLM_BASE_URL") or "https://llm.nethermind.io/v1"
+    )
     log_level: str = "INFO"
     log_file: str = "agent.log"
     
