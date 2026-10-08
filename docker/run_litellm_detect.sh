@@ -15,7 +15,7 @@ set -euo pipefail
 # - LOGS_DIR: log directory
 # - LITELLM_API_KEY: the LiteLLM API key
 # - LITELLM_MODEL: resolved model id (any model served by the LiteLLM proxy)
-# - LITELLM_BASE_URL: OpenAI-compatible base URL (default https://llm.nethermind.io/v1)
+# - LITELLM_BASE_URL: OpenAI-compatible base URL (default https://litellm.nethermind.dev/v1)
 # - DETECT_MD: path to detect instructions markdown
 # - LITELLM_WIRE_API: optional Codex wire protocol, "chat" (default) or "responses"
 # - LITELLM_TIMEOUT_SECONDS: optional max runtime (default 10800)
@@ -27,7 +27,7 @@ set -euo pipefail
 : "${LITELLM_MODEL:?missing LITELLM_MODEL}"
 : "${DETECT_MD:?missing DETECT_MD}"
 
-LITELLM_BASE_URL="${LITELLM_BASE_URL:-https://llm.nethermind.io/v1}"
+LITELLM_BASE_URL="${LITELLM_BASE_URL:-https://litellm.nethermind.dev/v1}"
 LITELLM_WIRE_API="${LITELLM_WIRE_API:-chat}"
 
 CODE_DIR="${1:?usage: run_litellm_detect.sh CODE_DIR}"

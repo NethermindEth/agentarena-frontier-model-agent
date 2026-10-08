@@ -105,8 +105,8 @@ OpenAI-compatible endpoint) instead of OpenAI. Configure it with:
 DETECTOR=litellm
 MODEL=<any model served by the LiteLLM proxy>
 API_KEY=<your LiteLLM API key>
-# Optional: override the endpoint (defaults to https://llm.nethermind.io/v1)
-LITELLM_BASE_URL=https://llm.nethermind.io/v1
+# Optional: override the endpoint (defaults to https://litellm.nethermind.dev/v1)
+LITELLM_BASE_URL=https://litellm.nethermind.dev/v1
 ```
 
 This mode is useful for testing the agent or auditing repositories outside of the AgentArena platform.

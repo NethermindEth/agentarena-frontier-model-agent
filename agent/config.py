@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Base URL for the LiteLLM (OpenAI-compatible) endpoint. Only used by the
     # `litellm` detector, which drives the Codex CLI against this URL.
     litellm_base_url: str = Field(
-        default_factory=lambda: _first_env("LITELLM_BASE_URL") or "https://llm.nethermind.io/v1"
+        default_factory=lambda: _first_env("LITELLM_BASE_URL") or "https://litellm.nethermind.dev/v1"
     )
     log_level: str = "INFO"
     log_file: str = "agent.log"
