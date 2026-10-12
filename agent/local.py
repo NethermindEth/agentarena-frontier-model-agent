@@ -151,7 +151,8 @@ def process_local(repo_url: str, output_path: str, config: Settings, commit_hash
 
         logger.info(f"Found {len(selected_contracts)} Solidity contracts to audit")
 
-        audit = run_detector(repo_dir, config, selected_paths=selected_contracts)
+        audit, model = run_detector(repo_dir, config, selected_paths=selected_contracts)
+        logger.info(f"Audit produced using model {model}")
 
         # Save results
         save_audit_results(output_path, audit.model_dump_json(indent=2))

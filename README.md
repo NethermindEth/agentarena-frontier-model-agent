@@ -35,15 +35,29 @@ Create a `.env` file from `.env.example` and set the variables.
 
 ```
 # Detector configuration
-# DETECTOR can be codex, claude, gemini, cursor, or litellm.
+# DETECTOR can be codex, claude, gemini, or cursor.
 DETECTOR=cursor
-CURSOR_API_KEY=your_cursor_api_key
-CURSOR_MODEL=composer-2.5
+
+# Every detector drives the Codex CLI against a LiteLLM (OpenAI-compatible)
+# proxy, so API_KEY is always a LiteLLM API key.
+API_KEY=your_litellm_api_key
+# Optional: override the endpoint (defaults to https://litellm.nethermind.dev/v1)
+LITELLM_BASE_URL=https://litellm.nethermind.dev/v1
 
 # Logging
 LOG_LEVEL=INFO
 LOG_FILE=agent.log
 ```
+
+Each detector lists the models served by the LiteLLM proxy and picks the most
+recent one matching its pattern (there is no `MODEL` variable anymore):
+
+| Detector | Model pattern          | Example        |
+| -------- | ---------------------- | -------------- |
+| `codex`  | `gpt-{x}.{y}*`         | `gpt-5.6-sol`  |
+| `claude` | `claude-opus-{x}-{y}`  | `claude-opus-5-5` |
+| `gemini` | `gemini-{x}.{y}-flash` | `gemini-3.8-flash` |
+| `cursor` | `grok-{x}.{y}`         | `grok-4.2`     |
 
 ## Usage
 
@@ -95,15 +109,14 @@ You can use the following example repository to test out the agent. The results 
 docker run -v .:/path/to --env-file=.env agentarena/frontier-model-agent audit-agent local --repo https://github.com/andreitoma8/learn-solidity-hacks.git --output /path/to/audit.json
 ```
 
-To use another detector, pass `--detector codex`, `--detector claude`, `--detector gemini`,
-or `--detector litellm` and configure the corresponding API key/model environment variables.
-
-The `litellm` detector reuses the Codex CLI but points it at a LiteLLM proxy (an
-OpenAI-compatible endpoint) instead of OpenAI. Configure it with:
+To use another detector, pass `--detector codex`, `--detector claude`, or
+`--detector gemini` (the default is `cursor`). Every detector reuses the Codex
+CLI pointed at a LiteLLM proxy (an OpenAI-compatible endpoint); the detectors
+differ only in which model they select from the proxy's model list (see the
+table above). Configure them with a LiteLLM API key:
 
 ```
-DETECTOR=litellm
-MODEL=<any model served by the LiteLLM proxy>
+DETECTOR=codex
 API_KEY=<your LiteLLM API key>
 # Optional: override the endpoint (defaults to https://litellm.nethermind.dev/v1)
 LITELLM_BASE_URL=https://litellm.nethermind.dev/v1

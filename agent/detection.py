@@ -4,32 +4,128 @@ Shared helpers for running detect-only audit scripts.
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, List, Optional
+
+import httpx
 
 from agent.config import Settings
 from agent.services.auditor import Audit, VulnerabilityFinding
 
 logger = logging.getLogger(__name__)
 
-DETECTORS = {"codex", "claude", "gemini", "cursor", "litellm"}
+# Every detector now runs the same mechanic: the Codex CLI pointed at a LiteLLM
+# proxy. They differ only in which models they are allowed to pick from the
+# LiteLLM model list (see MODEL_PATTERNS below). `litellm` is intentionally not
+# a detector anymore; its mechanic is what all detectors use.
+DETECTORS = {"codex", "claude", "gemini", "cursor"}
 REPORT_NAME = "audit.md"
 SCOPE_NAME = "AUDIT_SCOPE.md"
 
+# The single detect script that drives Codex against the LiteLLM proxy. All
+# detectors share it; the only per-detector difference is the selected model.
+DETECT_SCRIPT_NAME = "run_litellm_detect.sh"
 
-def _detector_script(detector: str) -> Path:
-    script_name = f"run_{detector}_detect.sh"
+# Per-detector model patterns. Each detector lists the models served by the
+# LiteLLM proxy and keeps the most recent one matching its pattern.
+#
+# - codex : gpt-{x}.{y}*  (the `*` suffix is anything, including empty)
+# - claude: claude-opus-{x}-{y}
+# - gemini: gemini-{x}.{y}-flash
+# - cursor: grok-{x}.{y}
+MODEL_PATTERNS = {
+    "codex": re.compile(r"^gpt-(\d+)\.(\d+)(.*)$"),
+    "claude": re.compile(r"^claude-opus-(\d+)-(\d+)$"),
+    "gemini": re.compile(r"^gemini-(\d+)\.(\d+)-flash$"),
+    "cursor": re.compile(r"^grok-(\d+)\.(\d+)$"),
+}
+
+
+def _detector_script() -> Path:
     candidates = [
-        Path("/opt/agent") / script_name,
-        Path(__file__).resolve().parents[1] / "docker" / script_name,
+        Path("/opt/agent") / DETECT_SCRIPT_NAME,
+        Path(__file__).resolve().parents[1] / "docker" / DETECT_SCRIPT_NAME,
     ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError(f"Could not find detector script {script_name}")
+    raise FileNotFoundError(f"Could not find detector script {DETECT_SCRIPT_NAME}")
+
+
+def _list_litellm_models(base_url: str, api_key: Optional[str]) -> List[str]:
+    """
+    List the model ids served by the LiteLLM (OpenAI-compatible) proxy.
+
+    :param base_url: The LiteLLM base URL (e.g. https://litellm.nethermind.dev/v1).
+    :param api_key: The LiteLLM API key, sent as a bearer token.
+    :return: The list of model ids advertised by the proxy.
+    """
+    url = base_url.rstrip("/") + "/models"
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    response = httpx.get(url, headers=headers, timeout=30.0)
+    response.raise_for_status()
+    payload = response.json()
+    return [item["id"] for item in payload.get("data", []) if isinstance(item, dict) and item.get("id")]
+
+
+def _select_model(detector: str, model_ids: Iterable[str]) -> str:
+    """
+    Pick the most recent model matching the detector's pattern.
+
+    Ordering is by the numeric version components (greatest major, then greatest
+    minor). For codex, a `*`-suffixed variant (e.g. gpt-5.6-sol) is preferred
+    over the bare one, breaking further ties by suffix.
+
+    :param detector: The detector key (one of MODEL_PATTERNS).
+    :param model_ids: The model ids advertised by the LiteLLM proxy.
+    :return: The selected model id.
+    :raises ValueError: If no advertised model matches the detector's pattern.
+    """
+    pattern = MODEL_PATTERNS[detector]
+
+    best_id: Optional[str] = None
+    best_key = None
+    for model_id in model_ids:
+        match = pattern.match(model_id)
+        if not match:
+            continue
+
+        major, minor = int(match.group(1)), int(match.group(2))
+        if detector == "codex":
+            suffix = match.group(3)
+            key = (major, minor, 1 if suffix else 0, suffix)
+        else:
+            key = (major, minor)
+
+        if best_key is None or key > best_key:
+            best_key = key
+            best_id = model_id
+
+    if best_id is None:
+        raise ValueError(
+            f"No model served by LiteLLM matched the '{detector}' pattern "
+            f"({pattern.pattern}). Advertised models: {sorted(model_ids)}"
+        )
+
+    return best_id
+
+
+def _resolve_model(detector: str, config: Settings) -> str:
+    """
+    Resolve the model a detector should use by querying the LiteLLM proxy and
+    selecting the most recent model matching the detector's pattern.
+    """
+    model_ids = _list_litellm_models(config.litellm_base_url, config.api_key)
+    model = _select_model(detector, model_ids)
+    logger.info("Selected model '%s' for detector '%s'", model, detector)
+    return model
 
 
 def _detect_instructions_path() -> Path:
@@ -43,34 +139,14 @@ def _detect_instructions_path() -> Path:
     raise FileNotFoundError("Could not find detect.md at /opt/agent/detect.md or agent/detect.md")
 
 
-def _apply_detector_env(env: dict, detector: str, config: Settings) -> None:
-    model_env = {
-        "codex": "CODEX_MODEL",
-        "claude": "CLAUDE_MODEL",
-        "gemini": "GEMINI_MODEL",
-        "cursor": "CURSOR_MODEL",
-        "litellm": "LITELLM_MODEL",
-    }[detector]
-    env.setdefault(model_env, config.model)
+def _apply_detector_env(env: dict, model: str, config: Settings) -> None:
+    # Every detector drives the Codex CLI against the LiteLLM (OpenAI-compatible)
+    # proxy, so the selected model, the base URL and the LiteLLM key travel
+    # together regardless of which detector was chosen.
+    env.setdefault("LITELLM_MODEL", model)
+    env.setdefault("LITELLM_BASE_URL", config.litellm_base_url)
 
-    # LiteLLM drives the Codex CLI against a custom OpenAI-compatible endpoint,
-    # so the base URL travels alongside the model/key.
-    if detector == "litellm":
-        env.setdefault("LITELLM_BASE_URL", config.litellm_base_url)
-
-    if not config.api_key:
-        return
-
-    if detector == "codex":
-        env.setdefault("OPENAI_API_KEY", config.api_key)
-        env.setdefault("CODEX_API_KEY", env["OPENAI_API_KEY"])
-    elif detector == "claude":
-        env.setdefault("ANTHROPIC_API_KEY", config.api_key)
-    elif detector == "gemini":
-        env.setdefault("GEMINI_API_KEY", config.api_key)
-    elif detector == "cursor":
-        env.setdefault("CURSOR_API_KEY", config.api_key)
-    elif detector == "litellm":
+    if config.api_key:
         env.setdefault("LITELLM_API_KEY", config.api_key)
 
 
@@ -281,12 +357,17 @@ def run_detector(
     config: Settings,
     selected_paths: Optional[Iterable[str]] = None,
     scope_text: Optional[str] = None,
-) -> Audit:
+) -> tuple[Audit, str]:
+    """
+    Run the configured detector and return the audit together with the model
+    that was actually used (selected from the LiteLLM model list).
+    """
     detector = config.detector.lower()
     if detector not in DETECTORS:
         raise ValueError(f"Unsupported detector '{config.detector}'. Expected one of {sorted(DETECTORS)}")
 
-    script_path = _detector_script(detector)
+    model = _resolve_model(detector, config)
+    script_path = _detector_script()
     detect_md = _detect_instructions_path()
 
     with tempfile.TemporaryDirectory(prefix="agentarena-audit-") as work_dir:
@@ -309,13 +390,13 @@ def run_detector(
                 "DETECT_MD": str(detect_md),
             }
         )
-        _apply_detector_env(env, detector, config)
+        _apply_detector_env(env, model, config)
 
-        logger.info("Running %s detector against copied repository %s", detector, audit_dir)
+        logger.info("Running %s detector (model %s) against copied repository %s", detector, model, audit_dir)
         subprocess.run(["bash", str(script_path), audit_dir], check=True, env=env)
 
         report_path = os.path.join(submission_dir, REPORT_NAME)
         if not os.path.isfile(report_path):
             raise FileNotFoundError(f"Detector did not create expected report: {report_path}")
 
-        return _audit_from_report(report_path)
+        return _audit_from_report(report_path), model
