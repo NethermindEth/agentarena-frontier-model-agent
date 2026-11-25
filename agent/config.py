@@ -18,7 +18,11 @@ def _first_env(*names: str) -> Optional[str]:
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # env_ignore_empty: a variable set to "" (e.g. `LITELLM_BASE_URL=`) counts as
+    # unset, so defaults and fallbacks (API_KEY -> LITELLM_API_KEY) still apply.
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", env_ignore_empty=True
+    )
 
     # The LiteLLM API key. Every detector drives the Codex CLI against the
     # LiteLLM proxy, so this is always a LiteLLM key (no direct-provider keys).
@@ -28,9 +32,7 @@ class Settings(BaseSettings):
     detector: str = Field(default_factory=lambda: _first_env("DETECTOR", "AGENT_DETECTOR") or "cursor")
     # Base URL for the LiteLLM (OpenAI-compatible) endpoint. All detectors drive
     # the Codex CLI against this URL, listing its models to pick the best one.
-    litellm_base_url: str = Field(
-        default_factory=lambda: _first_env("LITELLM_BASE_URL") or "https://litellm.nethermind.dev/v1"
-    )
+    litellm_base_url: str = "https://litellm.nethermind.dev/v1"
     log_level: str = "INFO"
     log_file: str = "agent.log"
     
