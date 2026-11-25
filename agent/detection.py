@@ -161,11 +161,16 @@ def _apply_detector_env(env: dict, model: str, config: Settings) -> None:
     # Every detector drives the Codex CLI against the LiteLLM (OpenAI-compatible)
     # proxy, so the selected model, the base URL and the LiteLLM key travel
     # together regardless of which detector was chosen.
-    env.setdefault("LITELLM_MODEL", model)
-    env.setdefault("LITELLM_BASE_URL", config.litellm_base_url)
+    #
+    # Assign (don't setdefault): any LITELLM_* already in the inherited
+    # environment must not override what was resolved here, otherwise Codex
+    # could run a different model, URL or key than the ones used to list models
+    # and reported back.
+    env["LITELLM_MODEL"] = model
+    env["LITELLM_BASE_URL"] = config.litellm_base_url
 
     if config.api_key:
-        env.setdefault("LITELLM_API_KEY", config.api_key)
+        env["LITELLM_API_KEY"] = config.api_key
 
 
 def _extract_json_report(report: str) -> str:
