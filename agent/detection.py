@@ -98,39 +98,41 @@ def _select_model(detector: str, model_ids: Iterable[str]) -> str:
     :raises ValueError: If no advertised model matches the detector's pattern.
     """
     pattern = MODEL_PATTERNS[detector]
+    model_ids = list(model_ids)  # iterated twice (selection + error message)
 
-    best_id: Optional[str] = None
-    best_key = None
-    for model_id in model_ids:
-        match = pattern.match(model_id)
-        if not match:
-            continue
+    candidates = []
+    for match in filter(None, map(pattern.match, model_ids)):
+        key = _model_sort_key(detector, match)
+        if key is not None:
+            candidates.append((key, match.string))
 
-        major, minor = int(match.group(1)), int(match.group(2) or 0)
-        if detector == "codex":
-            suffix = match.group(3) or ""
-            if suffix not in CODEX_SUFFIX_RANK:
-                continue
-            key = (major, minor, CODEX_SUFFIX_RANK[suffix])
-        elif detector == "claude":
-            # Same version: prefer the undated alias, then the latest snapshot,
-            # so the choice doesn't depend on the proxy's listing order.
-            date = match.group(3)
-            key = (major, minor, 1 if date is None else 0, date or "")
-        else:
-            key = (major, minor)
-
-        if best_key is None or key > best_key:
-            best_key = key
-            best_id = model_id
-
-    if best_id is None:
+    if not candidates:
         raise ValueError(
             f"No model served by LiteLLM matched the '{detector}' pattern "
             f"({pattern.pattern}). Advertised models: {sorted(model_ids)}"
         )
 
-    return best_id
+    return max(candidates)[1]
+
+
+def _model_sort_key(detector: str, match: re.Match) -> Optional[tuple]:
+    """
+    Sort key for a model id matched by MODEL_PATTERNS[detector] (greater is more
+    preferred), or None if the id must be skipped. Every key is fully comparable
+    (no None components), so keys of the same detector never raise on compare.
+    """
+    major, minor = int(match.group(1)), int(match.group(2) or 0)
+    if detector == "codex":
+        suffix = match.group(3) or ""
+        if suffix not in CODEX_SUFFIX_RANK:
+            return None
+        return (major, minor, CODEX_SUFFIX_RANK[suffix])
+    if detector == "claude":
+        # Same version: prefer the undated alias, then the latest snapshot, so
+        # the choice doesn't depend on the proxy's listing order.
+        date = match.group(3)
+        return (major, minor, date is None, date or "")
+    return (major, minor)
 
 
 def _resolve_model(detector: str, config: Settings) -> str:
