@@ -54,10 +54,15 @@ recent one matching its pattern (there is no `MODEL` variable anymore):
 
 | Detector | Model pattern          | Example        |
 | -------- | ---------------------- | -------------- |
-| `codex`  | `gpt-{x}.{y}*`         | `gpt-5.6-sol`  |
+| `codex`  | `gpt-{x}.{y}[-sol]`    | `gpt-5.6-sol`  |
 | `claude` | `claude-opus-{x}-{y}`  | `claude-opus-5-5` |
 | `gemini` | `gemini-{x}.{y}-flash` | `gemini-3.8-flash` |
 | `cursor` | `grok-{x}.{y}`         | `grok-4.2`     |
+
+The minor version is optional (`grok-5` counts as `grok-5.0`). For codex, only
+the suffixes listed in `CODEX_SUFFIX_RANK` (`agent/detection.py`) are eligible,
+currently none or `-sol`, with `-sol` preferred at the same version; other
+variants such as `-mini` are ignored.
 
 ## Usage
 
