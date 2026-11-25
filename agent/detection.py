@@ -33,7 +33,7 @@ DETECT_SCRIPT_NAME = "run_litellm_detect.sh"
 # Per-detector model patterns. Each detector lists the models served by the
 # LiteLLM proxy and keeps the most recent one matching its pattern.
 #
-# - codex : gpt-{x}[.{y}][-*]  (optional `-`-prefixed suffix, e.g. -sol)
+# - codex : gpt-{x}[.{y}][-*]  (suffix must be in CODEX_SUFFIX_RANK, e.g. -sol)
 # - claude: claude-opus-{x}[-{y}]
 # - gemini: gemini-{x}[.{y}]-flash
 # - cursor: grok-{x}[.{y}]
@@ -46,6 +46,12 @@ MODEL_PATTERNS = {
     "gemini": re.compile(r"^gemini-(\d+)(?:\.(\d+))?-flash$"),
     "cursor": re.compile(r"^grok-(\d+)(?:\.(\d+))?$"),
 }
+
+# Allowed codex variant suffixes and their preference (higher wins) among ids
+# with the same version. Suffixes not listed here (e.g. -mini, -terra) are
+# skipped, so a new variant on the proxy can't silently become the benchmark
+# model; add it here deliberately to opt in.
+CODEX_SUFFIX_RANK = {"": 0, "-sol": 1}
 
 
 def _detector_script() -> Path:
@@ -83,8 +89,9 @@ def _select_model(detector: str, model_ids: Iterable[str]) -> str:
     Pick the most recent model matching the detector's pattern.
 
     Ordering is by the numeric version components (greatest major, then greatest
-    minor). For codex, a `*`-suffixed variant (e.g. gpt-5.6-sol) is preferred
-    over the bare one, breaking further ties by suffix.
+    minor). For codex, only suffixes listed in CODEX_SUFFIX_RANK are eligible,
+    and among ids with the same version the higher-ranked suffix wins (e.g.
+    gpt-5.6-sol over gpt-5.6).
 
     :param detector: The detector key (one of MODEL_PATTERNS).
     :param model_ids: The model ids advertised by the LiteLLM proxy.
@@ -103,7 +110,9 @@ def _select_model(detector: str, model_ids: Iterable[str]) -> str:
         major, minor = int(match.group(1)), int(match.group(2) or 0)
         if detector == "codex":
             suffix = match.group(3) or ""
-            key = (major, minor, 1 if suffix else 0, suffix)
+            if suffix not in CODEX_SUFFIX_RANK:
+                continue
+            key = (major, minor, CODEX_SUFFIX_RANK[suffix])
         else:
             key = (major, minor)
 
