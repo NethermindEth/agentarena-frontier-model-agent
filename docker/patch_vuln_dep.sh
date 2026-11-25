@@ -4,9 +4,9 @@
 #
 # Replace every vendored copy of an npm package found under SEARCH_ROOTS with a
 # fixed version, in place. This is meant for vulnerable *transitive* deps that
-# are bundled inside third-party CLIs (e.g. cursor-agent vendors `piscina`, the
-# global npm/other CLIs vendor `picomatch`) and therefore cannot be upgraded
-# with a normal `npm install` in this project.
+# are bundled inside globally installed packages (e.g. the global npm vendors
+# `picomatch`) and therefore cannot be upgraded with a normal `npm install` in
+# this project.
 #
 # The whole package directory is swapped out (not just the version string in
 # package.json) so the vulnerable code is actually removed, and only copies that
@@ -14,7 +14,6 @@
 # package API never changes (a "close range" patch, e.g. 4.0.3 -> 4.0.4).
 #
 #   patch_vuln_dep.sh picomatch 4.0.4 "/usr /home /opt"
-#   patch_vuln_dep.sh piscina   4.9.3 "/usr /home /opt"
 #
 set -euo pipefail
 
