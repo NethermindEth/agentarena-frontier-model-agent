@@ -33,15 +33,18 @@ DETECT_SCRIPT_NAME = "run_litellm_detect.sh"
 # Per-detector model patterns. Each detector lists the models served by the
 # LiteLLM proxy and keeps the most recent one matching its pattern.
 #
-# - codex : gpt-{x}.{y}*  (the `*` suffix is anything, including empty)
-# - claude: claude-opus-{x}-{y}
-# - gemini: gemini-{x}.{y}-flash
-# - cursor: grok-{x}.{y}
+# - codex : gpt-{x}[.{y}][-*]  (optional `-`-prefixed suffix, e.g. -sol)
+# - claude: claude-opus-{x}[-{y}]
+# - gemini: gemini-{x}[.{y}]-flash
+# - cursor: grok-{x}[.{y}]
+#
+# The minor version is optional so major-only releases (e.g. grok-5,
+# claude-opus-6) are recognized; a missing minor counts as 0.
 MODEL_PATTERNS = {
-    "codex": re.compile(r"^gpt-(\d+)\.(\d+)(.*)$"),
-    "claude": re.compile(r"^claude-opus-(\d+)-(\d+)$"),
-    "gemini": re.compile(r"^gemini-(\d+)\.(\d+)-flash$"),
-    "cursor": re.compile(r"^grok-(\d+)\.(\d+)$"),
+    "codex": re.compile(r"^gpt-(\d+)(?:\.(\d+))?(-.*)?$"),
+    "claude": re.compile(r"^claude-opus-(\d+)(?:-(\d+))?$"),
+    "gemini": re.compile(r"^gemini-(\d+)(?:\.(\d+))?-flash$"),
+    "cursor": re.compile(r"^grok-(\d+)(?:\.(\d+))?$"),
 }
 
 
@@ -97,9 +100,9 @@ def _select_model(detector: str, model_ids: Iterable[str]) -> str:
         if not match:
             continue
 
-        major, minor = int(match.group(1)), int(match.group(2))
+        major, minor = int(match.group(1)), int(match.group(2) or 0)
         if detector == "codex":
-            suffix = match.group(3)
+            suffix = match.group(3) or ""
             key = (major, minor, 1 if suffix else 0, suffix)
         else:
             key = (major, minor)
