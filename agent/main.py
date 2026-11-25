@@ -30,7 +30,14 @@ def main():
     config = load_config()
     if args.detector:
         config.detector = args.detector
-    
+
+    # Every detector runs against the LiteLLM proxy, so the key is mandatory in
+    # both modes. Fail at startup instead of accepting tasks that can't run.
+    if not config.api_key:
+        print("Error: API_KEY (a LiteLLM API key) is required")
+        print("Please set API_KEY (or LITELLM_API_KEY) in the environment or your .env file")
+        sys.exit(1)
+
     if args.mode == "server":
         # Validate required fields for server mode
         if not config.webhook_auth_token:

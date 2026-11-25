@@ -66,7 +66,7 @@ def _detector_script() -> Path:
     raise FileNotFoundError(f"Could not find detector script {DETECT_SCRIPT_NAME}")
 
 
-def _list_litellm_models(base_url: str, api_key: Optional[str]) -> List[str]:
+def _list_litellm_models(base_url: str, api_key: str) -> List[str]:
     """
     List the model ids served by the LiteLLM (OpenAI-compatible) proxy.
 
@@ -75,9 +75,7 @@ def _list_litellm_models(base_url: str, api_key: Optional[str]) -> List[str]:
     :return: The list of model ids advertised by the proxy.
     """
     url = base_url.rstrip("/") + "/models"
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = {"Authorization": f"Bearer {api_key}"}
 
     response = httpx.get(url, headers=headers, timeout=30.0)
     response.raise_for_status()
@@ -168,9 +166,8 @@ def _apply_detector_env(env: dict, model: str, config: Settings) -> None:
     # and reported back.
     env["LITELLM_MODEL"] = model
     env["LITELLM_BASE_URL"] = config.litellm_base_url
-
-    if config.api_key:
-        env["LITELLM_API_KEY"] = config.api_key
+    # config.api_key is validated as non-empty at startup (agent/main.py).
+    env["LITELLM_API_KEY"] = config.api_key
 
 
 def _extract_json_report(report: str) -> str:
