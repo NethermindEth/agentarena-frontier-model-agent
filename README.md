@@ -55,7 +55,7 @@ recent one matching its pattern (there is no `MODEL` variable anymore):
 | Detector | Model pattern          | Example        |
 | -------- | ---------------------- | -------------- |
 | `codex`  | `gpt-{x}.{y}[-sol]`    | `gpt-5.6-sol`  |
-| `claude` | `claude-opus-{x}-{y}`  | `claude-opus-5-5` |
+| `claude` | `claude-opus-{x}-{y}[-{yyyymmdd}]` | `claude-opus-5-5` |
 | `gemini` | `gemini-{x}.{y}-flash` | `gemini-3.8-flash` |
 | `cursor` | `grok-{x}.{y}`         | `grok-4.2`     |
 

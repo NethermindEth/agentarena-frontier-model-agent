@@ -34,7 +34,8 @@ DETECT_SCRIPT_NAME = "run_litellm_detect.sh"
 # LiteLLM proxy and keeps the most recent one matching its pattern.
 #
 # - codex : gpt-{x}[.{y}][-*]  (suffix must be in CODEX_SUFFIX_RANK, e.g. -sol)
-# - claude: claude-opus-{x}[-{y}]
+# - claude: claude-opus-{x}[-{y}][-{yyyymmdd}]  (minor is 1-2 digits; optional
+#           8-digit snapshot date, so a date is never read as a minor)
 # - gemini: gemini-{x}[.{y}]-flash
 # - cursor: grok-{x}[.{y}]
 #
@@ -42,7 +43,7 @@ DETECT_SCRIPT_NAME = "run_litellm_detect.sh"
 # claude-opus-6) are recognized; a missing minor counts as 0.
 MODEL_PATTERNS = {
     "codex": re.compile(r"^gpt-(\d+)(?:\.(\d+))?(-.*)?$"),
-    "claude": re.compile(r"^claude-opus-(\d+)(?:-(\d+))?$"),
+    "claude": re.compile(r"^claude-opus-(\d+)(?:-(\d{1,2}))?(?:-(\d{8}))?$"),
     "gemini": re.compile(r"^gemini-(\d+)(?:\.(\d+))?-flash$"),
     "cursor": re.compile(r"^grok-(\d+)(?:\.(\d+))?$"),
 }
@@ -113,6 +114,11 @@ def _select_model(detector: str, model_ids: Iterable[str]) -> str:
             if suffix not in CODEX_SUFFIX_RANK:
                 continue
             key = (major, minor, CODEX_SUFFIX_RANK[suffix])
+        elif detector == "claude":
+            # Same version: prefer the undated alias, then the latest snapshot,
+            # so the choice doesn't depend on the proxy's listing order.
+            date = match.group(3)
+            key = (major, minor, 1 if date is None else 0, date or "")
         else:
             key = (major, minor)
 
