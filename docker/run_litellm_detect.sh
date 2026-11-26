@@ -74,6 +74,17 @@ env_key = "LITELLM_API_KEY"
 wire_api = "responses"
 EOF
 
+# xAI's Responses API rejects Codex's multi-agent tools, which are sent as a
+# single tool of type "namespace" (422: 'unknown variant `namespace`'). The
+# detect-only audit doesn't use sub-agents, so turn that feature off for Grok.
+if [[ "${LITELLM_MODEL}" == xai/* ]]; then
+  cat >> "${CODEX_CONFIG_DIR}/config.toml" <<EOF
+
+[features]
+multi_agent = false
+EOF
+fi
+
 cd "${AGENT_DIR}"
 
 timeout --signal=KILL "${TIMEOUT_SECONDS}s" codex exec \
