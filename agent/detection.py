@@ -33,19 +33,25 @@ DETECT_SCRIPT_NAME = "run_litellm_detect.sh"
 # Per-detector model patterns. Each detector lists the models served by the
 # LiteLLM proxy and keeps the most recent one matching its pattern.
 #
-# - codex : gpt-{x}[.{y}][-*]  (suffix must be in CODEX_SUFFIX_RANK, e.g. -sol)
-# - claude: claude-opus-{x}[-{y}][-{yyyymmdd}]  (minor is 1-2 digits; optional
-#           8-digit snapshot date, so a date is never read as a minor)
-# - gemini: gemini-{x}[.{y}]-flash
-# - cursor: grok-{x}[.{y}]
+# The proxy advertises ids prefixed by the LiteLLM provider route (e.g.
+# "openai/gpt-6.2-sol"), and the same family may be listed under several
+# routes (e.g. "vertex_ai/claude-opus-5-5", "moonshotai/claude-opus-5-5"). Each
+# pattern requires the first-party provider prefix, so only that route is used.
+#
+# - codex : openai/gpt-{x}[.{y}][-*]  (suffix must be in CODEX_SUFFIX_RANK)
+# - claude: anthropic/claude-opus-{x}[-{y}][{-|@}{yyyymmdd}]  (minor is 1-2
+#           digits; optional 8-digit snapshot date, so a date is never read as a
+#           minor; aliases such as "@default" are skipped)
+# - gemini: gemini/gemini-{x}[.{y}]-flash
+# - cursor: xai/grok-{x}[.{y}]
 #
 # The minor version is optional so major-only releases (e.g. grok-5,
 # claude-opus-6) are recognized; a missing minor counts as 0.
 MODEL_PATTERNS = {
-    "codex": re.compile(r"^gpt-(\d+)(?:\.(\d+))?(-.*)?$"),
-    "claude": re.compile(r"^claude-opus-(\d+)(?:-(\d{1,2}))?(?:-(\d{8}))?$"),
-    "gemini": re.compile(r"^gemini-(\d+)(?:\.(\d+))?-flash$"),
-    "cursor": re.compile(r"^grok-(\d+)(?:\.(\d+))?$"),
+    "codex": re.compile(r"^openai/gpt-(\d+)(?:\.(\d+))?(-.*)?$"),
+    "claude": re.compile(r"^anthropic/claude-opus-(\d+)(?:-(\d{1,2}))?(?:[-@](\d{8}))?$"),
+    "gemini": re.compile(r"^gemini/gemini-(\d+)(?:\.(\d+))?-flash$"),
+    "cursor": re.compile(r"^xai/grok-(\d+)(?:\.(\d+))?$"),
 }
 
 # Allowed codex variant suffixes and their preference (higher wins) among ids
@@ -132,6 +138,10 @@ def _model_sort_key(detector: str, match: re.Match) -> Optional[tuple]:
         # the choice doesn't depend on the proxy's listing order.
         date = match.group(3)
         return (major, minor, date is None, date or "")
+    if detector == "cursor":
+        # xAI versions are decimals: grok-4.20 predates grok-4.3/4.7, so the
+        # minor is compared as a fraction (0.20 < 0.3 < 0.7), not an integer.
+        return (major, float("0." + (match.group(2) or "0")))
     return (major, minor)
 
 

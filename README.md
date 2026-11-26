@@ -52,14 +52,17 @@ LOG_FILE=agent.log
 Each detector lists the models served by the LiteLLM proxy and picks the most
 recent one matching its pattern (there is no `MODEL` variable anymore):
 
-| Detector | Model pattern          | Example        |
-| -------- | ---------------------- | -------------- |
-| `codex`  | `gpt-{x}.{y}[-sol]`    | `gpt-5.6-sol`  |
-| `claude` | `claude-opus-{x}-{y}[-{yyyymmdd}]` | `claude-opus-5-5` |
-| `gemini` | `gemini-{x}.{y}-flash` | `gemini-3.8-flash` |
-| `cursor` | `grok-{x}.{y}`         | `grok-4.2`     |
+| Detector | Model pattern                                | Example                     |
+| -------- | -------------------------------------------- | --------------------------- |
+| `codex`  | `openai/gpt-{x}.{y}[-sol]`                   | `openai/gpt-6.2-sol`        |
+| `claude` | `anthropic/claude-opus-{x}-{y}[@{yyyymmdd}]` | `anthropic/claude-opus-5-5` |
+| `gemini` | `gemini/gemini-{x}.{y}-flash`                | `gemini/gemini-3.8-flash`   |
+| `cursor` | `xai/grok-{x}.{y}`                           | `xai/grok-4.7`              |
 
-The minor version is optional (`grok-5` counts as `grok-5.0`). For codex, only
+The provider prefix is required: the proxy lists the same family under several
+routes (e.g. `vertex_ai/claude-opus-5-5`), and only the first-party route is
+used. The minor version is optional (`grok-5` counts as `grok-5.0`). Grok minors
+are compared as decimals (`grok-4.20` < `grok-4.3` < `grok-4.7`). For codex, only
 the suffixes listed in `CODEX_SUFFIX_RANK` (`agent/detection.py`) are eligible,
 currently none or `-sol`, with `-sol` preferred at the same version; other
 variants such as `-mini` are ignored.

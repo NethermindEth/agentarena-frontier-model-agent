@@ -17,7 +17,6 @@ set -euo pipefail
 # - LITELLM_MODEL: resolved model id (any model served by the LiteLLM proxy)
 # - LITELLM_BASE_URL: OpenAI-compatible base URL (default https://litellm.nethermind.dev/v1)
 # - DETECT_MD: path to detect instructions markdown
-# - LITELLM_WIRE_API: optional Codex wire protocol, "chat" (default) or "responses"
 # - LITELLM_TIMEOUT_SECONDS: optional max runtime (default 10800)
 
 : "${AGENT_DIR:?missing AGENT_DIR}"
@@ -28,7 +27,6 @@ set -euo pipefail
 : "${DETECT_MD:?missing DETECT_MD}"
 
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-https://litellm.nethermind.dev/v1}"
-LITELLM_WIRE_API="${LITELLM_WIRE_API:-chat}"
 
 CODE_DIR="${1:?usage: run_litellm_detect.sh CODE_DIR}"
 if [[ ! -d "${CODE_DIR}" ]]; then
@@ -60,6 +58,10 @@ Then proceed. Ensure to follow the submission instructions exactly.'
 # Codex reads this from $CODEX_HOME/.codex, and HOME == AGENT_DIR here, so the
 # config lives at $AGENT_DIR/.codex/config.toml. The key is read from the env
 # var named by `env_key`, so no `codex login` step is required.
+#
+# wire_api is fixed to "responses": the pinned Codex (rust-v0.153.x) rejects
+# "chat" ('wire_api = "chat" is no longer supported'), so the LiteLLM proxy must
+# serve /v1/responses for every model it routes (GPT, Claude, Gemini, Grok).
 CODEX_CONFIG_DIR="${AGENT_DIR}/.codex"
 mkdir -p "${CODEX_CONFIG_DIR}"
 cat > "${CODEX_CONFIG_DIR}/config.toml" <<EOF
@@ -69,7 +71,7 @@ model_provider = "litellm"
 name = "LiteLLM"
 base_url = "${LITELLM_BASE_URL}"
 env_key = "LITELLM_API_KEY"
-wire_api = "${LITELLM_WIRE_API}"
+wire_api = "responses"
 EOF
 
 cd "${AGENT_DIR}"
