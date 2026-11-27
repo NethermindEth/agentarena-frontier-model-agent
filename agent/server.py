@@ -60,20 +60,21 @@ async def fetch_solidity_files(contracts_url: str, config: Settings) -> str:
     
     return None
 
-async def send_audit_results(callback_url: str, task_id: str, audit: Audit):
+async def send_audit_results(callback_url: str, task_id: str, audit: Audit, model: str):
     """
     Send audit results back to the API.
-    
+
     Args:
         callback_url: URL to send results to
         task_id: Task ID
         audit: Audit results
+        model: The model used to produce the findings
     """
     try:
         async with httpx.AsyncClient(timeout=600.0) as client:
             # Convert Pydantic models to dict first
             findings_dict = [finding.model_dump() for finding in audit.findings]
-            payload = {"task_id": task_id, "findings": findings_dict}
+            payload = {"task_id": task_id, "findings": findings_dict, "model": model}
             
             # Log detailed payload information for debugging
             logger.info(f"Sending audit results to {callback_url} for task {task_id}")
@@ -255,7 +256,7 @@ Description of the repository
 {''.join(f"Question: {(qar.question or '').replace('\n\n', '\n')}\nAnswer: {(qar.answer or '').replace('\n\n', '\n')}\n\n" for qar in task.qaResponses)}
 """
 
-async def perform_audit(task_details: TaskResponse, repo_dir: str, config: Settings) -> Optional[Audit]:
+async def perform_audit(task_details: TaskResponse, repo_dir: str, config: Settings) -> tuple[Optional[Audit], Optional[str]]:
     logger.info(f"Running detector audit for task {task_details.id}")
     selected_paths = [
         *(task_details.selectedFiles or []),
@@ -302,12 +303,12 @@ async def process_notification(notification: Notification, config: Settings):
             logger.error(f"Failed to download repository for task {notification.task_id}")
             return
         
-        audit = await perform_audit(task_details, repo_dir, config)
+        audit, model = await perform_audit(task_details, repo_dir, config)
         if not audit:
             return
 
         # Send results back
-        await send_audit_results(notification.post_findings_url, notification.task_id, audit)
+        await send_audit_results(notification.post_findings_url, notification.task_id, audit, model)
     except Exception as e:
         logger.error(f"Error processing notification: {str(e)}", exc_info=True)
     finally:

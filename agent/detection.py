@@ -4,32 +4,175 @@ Shared helpers for running detect-only audit scripts.
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, List, Optional
+
+import httpx
 
 from agent.config import Settings
 from agent.services.auditor import Audit, VulnerabilityFinding
 
 logger = logging.getLogger(__name__)
 
+# Every detector now runs the same mechanic: the Codex CLI pointed at a LiteLLM
+# proxy. They differ only in which models they are allowed to pick from the
+# LiteLLM model list (see MODEL_PATTERNS below). `litellm` is intentionally not
+# a detector anymore; its mechanic is what all detectors use.
 DETECTORS = {"codex", "claude", "gemini", "cursor"}
 REPORT_NAME = "audit.md"
 SCOPE_NAME = "AUDIT_SCOPE.md"
 
+# The single detect script that drives Codex against the LiteLLM proxy. All
+# detectors share it; the only per-detector difference is the selected model.
+DETECT_SCRIPT_NAME = "run_litellm_detect.sh"
 
-def _detector_script(detector: str) -> Path:
-    script_name = f"run_{detector}_detect.sh"
+# Per-detector model patterns. Each detector lists the models served by the
+# LiteLLM proxy and keeps the most recent one matching its pattern.
+#
+# The proxy advertises ids prefixed by the LiteLLM provider route (e.g.
+# "openai/gpt-6.2-sol"), and the same family may be listed under several
+# routes (e.g. "vertex_ai/claude-opus-5-5", "moonshotai/claude-opus-5-5"). Each
+# pattern requires the first-party provider prefix, so only that route is used.
+#
+# - codex : openai/gpt-{x}[.{y}][-*]  (suffix must be in CODEX_SUFFIX_RANK)
+# - claude: anthropic/claude-opus-{x}[-{y}][{-|@}{yyyymmdd}]  (minor is 1-2
+#           digits; optional 8-digit snapshot date, so a date is never read as a
+#           minor; aliases such as "@default" are skipped)
+# - gemini: gemini/gemini-{x}[.{y}]-flash
+# - cursor: xai/grok-{x}[.{y}]
+#
+# The minor version is optional so major-only releases (e.g. grok-5,
+# claude-opus-6) are recognized; a missing minor counts as 0.
+MODEL_PATTERNS = {
+    "codex": re.compile(r"^openai/gpt-(\d+)(?:\.(\d+))?(-.*)?$"),
+    "claude": re.compile(r"^anthropic/claude-opus-(\d+)(?:-(\d{1,2}))?(?:[-@](\d{8}))?$"),
+    "gemini": re.compile(r"^gemini/gemini-(\d+)(?:\.(\d+))?-flash$"),
+    "cursor": re.compile(r"^xai/grok-(\d+)(?:\.(\d+))?$"),
+}
+
+# Allowed codex variant suffixes and their preference (higher wins) among ids
+# with the same version. Suffixes not listed here (e.g. -mini, -terra) are
+# skipped, so a new variant on the proxy can't silently become the benchmark
+# model; add it here deliberately to opt in.
+CODEX_SUFFIX_RANK = {"": 0, "-sol": 1}
+
+# TEMPORARY: codex models must also be in this whitelist, applied after the
+# pattern/suffix match above. Newer models (gpt-6.1-sol, gpt-6.2-sol) reject the
+# audit as "flagged for possible cybersecurity risk" unless the OpenAI account
+# is enrolled in the cybersecurity access program (access_programs.cyber),
+# which the account behind the Nethermind LiteLLM proxy is not. These are the
+# models that completed a full audit through the proxy. Remove this filter once
+# Nethermind gets the account into that program.
+CODEX_TEMP_WHITELIST = frozenset({
+    "openai/gpt-5.1",
+    "openai/gpt-5.2",
+    "openai/gpt-5.4",
+    "openai/gpt-5.5",
+    "openai/gpt-5.6",
+    "openai/gpt-5.6-sol",
+})
+
+
+def _detector_script() -> Path:
     candidates = [
-        Path("/opt/agent") / script_name,
-        Path(__file__).resolve().parents[1] / "docker" / script_name,
+        Path("/opt/agent") / DETECT_SCRIPT_NAME,
+        Path(__file__).resolve().parents[1] / "docker" / DETECT_SCRIPT_NAME,
     ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError(f"Could not find detector script {script_name}")
+    raise FileNotFoundError(f"Could not find detector script {DETECT_SCRIPT_NAME}")
+
+
+def _list_litellm_models(base_url: str, api_key: str) -> List[str]:
+    """
+    List the model ids served by the LiteLLM (OpenAI-compatible) proxy.
+
+    :param base_url: The LiteLLM base URL (e.g. https://litellm.nethermind.dev/v1).
+    :param api_key: The LiteLLM API key, sent as a bearer token.
+    :return: The list of model ids advertised by the proxy.
+    """
+    url = base_url.rstrip("/") + "/models"
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    response = httpx.get(url, headers=headers, timeout=30.0)
+    response.raise_for_status()
+    payload = response.json()
+    return [item["id"] for item in payload.get("data", []) if isinstance(item, dict) and item.get("id")]
+
+
+def _select_model(detector: str, model_ids: Iterable[str]) -> str:
+    """
+    Pick the most recent model matching the detector's pattern.
+
+    Ordering is by the numeric version components (greatest major, then greatest
+    minor). For codex, only suffixes listed in CODEX_SUFFIX_RANK are eligible,
+    and among ids with the same version the higher-ranked suffix wins (e.g.
+    gpt-5.6-sol over gpt-5.6).
+
+    :param detector: The detector key (one of MODEL_PATTERNS).
+    :param model_ids: The model ids advertised by the LiteLLM proxy.
+    :return: The selected model id.
+    :raises ValueError: If no advertised model matches the detector's pattern.
+    """
+    pattern = MODEL_PATTERNS[detector]
+    model_ids = list(model_ids)  # iterated twice (selection + error message)
+
+    candidates = []
+    for match in filter(None, map(pattern.match, model_ids)):
+        key = _model_sort_key(detector, match)
+        if key is not None:
+            candidates.append((key, match.string))
+
+    if not candidates:
+        raise ValueError(
+            f"No model served by LiteLLM matched the '{detector}' pattern "
+            f"({pattern.pattern}). Advertised models: {sorted(model_ids)}"
+        )
+
+    return max(candidates)[1]
+
+
+def _model_sort_key(detector: str, match: re.Match) -> Optional[tuple]:
+    """
+    Sort key for a model id matched by MODEL_PATTERNS[detector] (greater is more
+    preferred), or None if the id must be skipped. Every key is fully comparable
+    (no None components), so keys of the same detector never raise on compare.
+    """
+    major, minor = int(match.group(1)), int(match.group(2) or 0)
+    if detector == "codex":
+        suffix = match.group(3) or ""
+        if suffix not in CODEX_SUFFIX_RANK:
+            return None
+        # TEMPORARY: see CODEX_TEMP_WHITELIST.
+        if match.string not in CODEX_TEMP_WHITELIST:
+            return None
+        return (major, minor, CODEX_SUFFIX_RANK[suffix])
+    if detector == "claude":
+        # Same version: prefer the undated alias, then the latest snapshot, so
+        # the choice doesn't depend on the proxy's listing order.
+        date = match.group(3)
+        return (major, minor, date is None, date or "")
+    if detector == "cursor":
+        # xAI versions are decimals: grok-4.20 predates grok-4.3/4.7, so the
+        # minor is compared as a fraction (0.20 < 0.3 < 0.7), not an integer.
+        return (major, float("0." + (match.group(2) or "0")))
+    return (major, minor)
+
+
+def _resolve_model(detector: str, config: Settings) -> str:
+    """
+    Resolve the model a detector should use by querying the LiteLLM proxy and
+    selecting the most recent model matching the detector's pattern.
+    """
+    model_ids = _list_litellm_models(config.litellm_base_url, config.api_key)
+    model = _select_model(detector, model_ids)
+    logger.info("Selected model '%s' for detector '%s'", model, detector)
+    return model
 
 
 def _detect_instructions_path() -> Path:
@@ -43,27 +186,19 @@ def _detect_instructions_path() -> Path:
     raise FileNotFoundError("Could not find detect.md at /opt/agent/detect.md or agent/detect.md")
 
 
-def _apply_detector_env(env: dict, detector: str, config: Settings) -> None:
-    model_env = {
-        "codex": "CODEX_MODEL",
-        "claude": "CLAUDE_MODEL",
-        "gemini": "GEMINI_MODEL",
-        "cursor": "CURSOR_MODEL",
-    }[detector]
-    env.setdefault(model_env, config.model)
-
-    if not config.api_key:
-        return
-
-    if detector == "codex":
-        env.setdefault("OPENAI_API_KEY", config.api_key)
-        env.setdefault("CODEX_API_KEY", env["OPENAI_API_KEY"])
-    elif detector == "claude":
-        env.setdefault("ANTHROPIC_API_KEY", config.api_key)
-    elif detector == "gemini":
-        env.setdefault("GEMINI_API_KEY", config.api_key)
-    elif detector == "cursor":
-        env.setdefault("CURSOR_API_KEY", config.api_key)
+def _apply_detector_env(env: dict, model: str, config: Settings) -> None:
+    # Every detector drives the Codex CLI against the LiteLLM (OpenAI-compatible)
+    # proxy, so the selected model, the base URL and the LiteLLM key travel
+    # together regardless of which detector was chosen.
+    #
+    # Assign (don't setdefault): any LITELLM_* already in the inherited
+    # environment must not override what was resolved here, otherwise Codex
+    # could run a different model, URL or key than the ones used to list models
+    # and reported back.
+    env["LITELLM_MODEL"] = model
+    env["LITELLM_BASE_URL"] = config.litellm_base_url
+    # config.api_key is validated as non-empty at startup (agent/main.py).
+    env["LITELLM_API_KEY"] = config.api_key
 
 
 def _extract_json_report(report: str) -> str:
@@ -273,12 +408,17 @@ def run_detector(
     config: Settings,
     selected_paths: Optional[Iterable[str]] = None,
     scope_text: Optional[str] = None,
-) -> Audit:
+) -> tuple[Audit, str]:
+    """
+    Run the configured detector and return the audit together with the model
+    that was actually used (selected from the LiteLLM model list).
+    """
     detector = config.detector.lower()
     if detector not in DETECTORS:
         raise ValueError(f"Unsupported detector '{config.detector}'. Expected one of {sorted(DETECTORS)}")
 
-    script_path = _detector_script(detector)
+    model = _resolve_model(detector, config)
+    script_path = _detector_script()
     detect_md = _detect_instructions_path()
 
     with tempfile.TemporaryDirectory(prefix="agentarena-audit-") as work_dir:
@@ -301,13 +441,13 @@ def run_detector(
                 "DETECT_MD": str(detect_md),
             }
         )
-        _apply_detector_env(env, detector, config)
+        _apply_detector_env(env, model, config)
 
-        logger.info("Running %s detector against copied repository %s", detector, audit_dir)
+        logger.info("Running %s detector (model %s) against copied repository %s", detector, model, audit_dir)
         subprocess.run(["bash", str(script_path), audit_dir], check=True, env=env)
 
         report_path = os.path.join(submission_dir, REPORT_NAME)
         if not os.path.isfile(report_path):
             raise FileNotFoundError(f"Detector did not create expected report: {report_path}")
 
-        return _audit_from_report(report_path)
+        return _audit_from_report(report_path), model

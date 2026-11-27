@@ -37,13 +37,41 @@ Create a `.env` file from `.env.example` and set the variables.
 # Detector configuration
 # DETECTOR can be codex, claude, gemini, or cursor.
 DETECTOR=cursor
-CURSOR_API_KEY=your_cursor_api_key
-CURSOR_MODEL=composer-2.5
+
+# Every detector drives the Codex CLI against a LiteLLM (OpenAI-compatible)
+# proxy, so API_KEY is always a LiteLLM API key.
+API_KEY=your_litellm_api_key
+# Optional: override the endpoint (defaults to https://litellm.nethermind.dev/v1)
+LITELLM_BASE_URL=https://litellm.nethermind.dev/v1
 
 # Logging
 LOG_LEVEL=INFO
 LOG_FILE=agent.log
 ```
+
+Each detector lists the models served by the LiteLLM proxy and picks the most
+recent one matching its pattern (there is no `MODEL` variable anymore):
+
+| Detector | Model pattern                                | Example                     |
+| -------- | -------------------------------------------- | --------------------------- |
+| `codex`  | `openai/gpt-{x}.{y}[-sol]`                   | `openai/gpt-6.2-sol`        |
+| `claude` | `anthropic/claude-opus-{x}-{y}[@{yyyymmdd}]` | `anthropic/claude-opus-5-5` |
+| `gemini` | `gemini/gemini-{x}.{y}-flash`                | `gemini/gemini-3.8-flash`   |
+| `cursor` | `xai/grok-{x}.{y}`                           | `xai/grok-4.7`              |
+
+The provider prefix is required: the proxy lists the same family under several
+routes (e.g. `vertex_ai/claude-opus-5-5`), and only the first-party route is
+used. The minor version is optional (`grok-5` counts as `grok-5.0`). Grok minors
+are compared as decimals (`grok-4.20` < `grok-4.3` < `grok-4.7`). For codex, only
+the suffixes listed in `CODEX_SUFFIX_RANK` (`agent/detection.py`) are eligible,
+currently none or `-sol`, with `-sol` preferred at the same version; other
+variants such as `-mini` are ignored.
+
+**Temporary:** codex is further restricted to `CODEX_TEMP_WHITELIST`
+(`agent/detection.py`: `gpt-5.1`, `gpt-5.2`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6`,
+`gpt-5.6-sol`). Newer models (e.g. `gpt-6.2-sol`) reject audits as a possible
+cybersecurity risk until the OpenAI account behind the LiteLLM proxy joins
+OpenAI's cybersecurity access program; the whitelist will be removed then.
 
 ## Usage
 
@@ -95,8 +123,18 @@ You can use the following example repository to test out the agent. The results 
 docker run -v .:/path/to --env-file=.env agentarena/frontier-model-agent audit-agent local --repo https://github.com/andreitoma8/learn-solidity-hacks.git --output /path/to/audit.json
 ```
 
-To use another detector, pass `--detector codex`, `--detector claude`, or `--detector gemini`
-and configure the corresponding API key/model environment variables.
+To use another detector, pass `--detector codex`, `--detector claude`, or
+`--detector gemini` (the default is `cursor`). Every detector reuses the Codex
+CLI pointed at a LiteLLM proxy (an OpenAI-compatible endpoint); the detectors
+differ only in which model they select from the proxy's model list (see the
+table above). Configure them with a LiteLLM API key:
+
+```
+DETECTOR=codex
+API_KEY=<your LiteLLM API key>
+# Optional: override the endpoint (defaults to https://litellm.nethermind.dev/v1)
+LITELLM_BASE_URL=https://litellm.nethermind.dev/v1
+```
 
 This mode is useful for testing the agent or auditing repositories outside of the AgentArena platform.
 

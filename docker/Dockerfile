@@ -65,30 +65,14 @@ RUN set -eux; \
     cd /; rm -rf /usr/local/src/codex; \
     codex --version
 
-# install claude code cli
-RUN npm install -g @anthropic-ai/claude-code && claude --version
-
-# install gemini cli
-RUN npm install -g @google/gemini-cli && gemini --version
-
-# install cursor cli
-# NOTES: Since this installer does not pin a version, we need to manually
-#        bump / patch the version(s) later if any vulnerability arises.
-RUN curl -fsSL https://cursor.com/install | bash \
-    && cp -L "$HOME/.local/bin/cursor-agent" /usr/local/bin/cursor-agent \
-    && chmod 0755 /usr/local/bin/cursor-agent \
-    && cursor-agent --version
-
-# Security remediation: patch vulnerable transitive deps that are vendored
-# inside the CLIs installed above and cannot be upgraded via this project's
-# package manager. Pinned to close (same-major/minor) ranges so the package
-# API is unchanged. Run after every CLI install so all bundled copies are seen.
+# Security remediation: patch vulnerable transitive deps vendored inside
+# globally installed npm packages (Node 22's bundled npm ships picomatch
+# 4.0.3), which cannot be upgraded via this project's package manager. Pinned
+# to close (same-major/minor) ranges so the package API is unchanged.
 #   CVE-2026-33671  picomatch  *.* -> 4.0.4  (ReDoS via crafted extglob, HIGH)
-#   CVE-2026-55388  piscina    4.x -> 4.9.3  (prototype pollution -> RCE)
 COPY docker/patch_vuln_dep.sh /usr/local/bin/patch_vuln_dep.sh
 RUN chmod +x /usr/local/bin/patch_vuln_dep.sh \
-    && patch_vuln_dep.sh picomatch 4.0.4 "/usr /home /opt" \
-    && patch_vuln_dep.sh piscina   4.9.3 "/usr /home /opt"
+    && patch_vuln_dep.sh picomatch 4.0.4 "/usr /home /opt"
 
 # install ripgrep
 RUN apt-get update && apt-get install -y --no-install-recommends ripgrep && rm -rf /var/lib/apt/lists/*
@@ -109,13 +93,11 @@ RUN git config --global --add safe.directory $AGENT_DIR && \
     git config --global user.email "agent@agentarena.local" && \
     git config --global user.name "agent"
 
-# Then install and configure the four launchers.
+# Then install and configure the launcher. Every detector runs the Codex CLI
+# against the LiteLLM proxy through this single script.
 RUN python3 -m pip install --no-cache-dir httpx uvloop loguru
-COPY docker/run_*_detect.sh /opt/agent/
-RUN chmod +x /opt/agent/run_codex_detect.sh
-RUN chmod +x /opt/agent/run_claude_detect.sh
-RUN chmod +x /opt/agent/run_gemini_detect.sh
-RUN chmod +x /opt/agent/run_cursor_detect.sh
+COPY docker/run_litellm_detect.sh /opt/agent/
+RUN chmod +x /opt/agent/run_litellm_detect.sh
 
 # Also, copying all the agent contents.
 COPY agent/ /opt/agent
