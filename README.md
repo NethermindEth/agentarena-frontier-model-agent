@@ -67,6 +67,12 @@ the suffixes listed in `CODEX_SUFFIX_RANK` (`agent/detection.py`) are eligible,
 currently none or `-sol`, with `-sol` preferred at the same version; other
 variants such as `-mini` are ignored.
 
+**Temporary:** codex is further restricted to `CODEX_TEMP_WHITELIST`
+(`agent/detection.py`: `gpt-5.1`, `gpt-5.2`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6`,
+`gpt-5.6-sol`). Newer models (e.g. `gpt-6.2-sol`) reject audits as a possible
+cybersecurity risk until the OpenAI account behind the LiteLLM proxy joins
+OpenAI's cybersecurity access program; the whitelist will be removed then.
+
 ## Usage
 
 ### Server Mode

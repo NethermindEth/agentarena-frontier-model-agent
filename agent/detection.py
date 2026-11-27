@@ -60,6 +60,22 @@ MODEL_PATTERNS = {
 # model; add it here deliberately to opt in.
 CODEX_SUFFIX_RANK = {"": 0, "-sol": 1}
 
+# TEMPORARY: codex models must also be in this whitelist, applied after the
+# pattern/suffix match above. Newer models (gpt-6.1-sol, gpt-6.2-sol) reject the
+# audit as "flagged for possible cybersecurity risk" unless the OpenAI account
+# is enrolled in the cybersecurity access program (access_programs.cyber),
+# which the account behind the Nethermind LiteLLM proxy is not. These are the
+# models that completed a full audit through the proxy. Remove this filter once
+# Nethermind gets the account into that program.
+CODEX_TEMP_WHITELIST = frozenset({
+    "openai/gpt-5.1",
+    "openai/gpt-5.2",
+    "openai/gpt-5.4",
+    "openai/gpt-5.5",
+    "openai/gpt-5.6",
+    "openai/gpt-5.6-sol",
+})
+
 
 def _detector_script() -> Path:
     candidates = [
@@ -131,6 +147,9 @@ def _model_sort_key(detector: str, match: re.Match) -> Optional[tuple]:
     if detector == "codex":
         suffix = match.group(3) or ""
         if suffix not in CODEX_SUFFIX_RANK:
+            return None
+        # TEMPORARY: see CODEX_TEMP_WHITELIST.
+        if match.string not in CODEX_TEMP_WHITELIST:
             return None
         return (major, minor, CODEX_SUFFIX_RANK[suffix])
     if detector == "claude":
